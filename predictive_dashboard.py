@@ -19,7 +19,7 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #f0f2f6; border-radius: 4px 4px 0 0; padding: 10px 20px; }
     .stTabs [aria-selected="true"] { background-color: #e0e2e6; font-weight: bold; }
     </style>
-    """, unsafe_all_with_code=True)
+    """, unsafe_allow_html=True)
 
 # --- Data Loading (Shared and Cached) ---
 @st.cache_data
