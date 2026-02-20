@@ -12,7 +12,6 @@ def load_and_clean_data(filepath):
     df = pd.read_csv(filepath, low_memory=False)
     df.columns = df.columns.str.replace('ï»¿', '').str.strip()
     
-    # Core columns + Bookie columns for comparison
     core_cols = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR', 
                  'HS', 'AS', 'HST', 'AST', 'HC', 'AC', 'Season']
     
@@ -29,10 +28,6 @@ def load_and_clean_data(filepath):
     return df
 
 def calculate_elo(df):
-    """
-    Calculates Elo ratings for each team over time.
-    Standard Elo formula: R_new = R_old + K * (Actual - Expected)
-    """
     elo_ratings = {team: 1500 for team in pd.concat([df['HomeTeam'], df['AwayTeam']]).unique()}
     k_factor = 32
     
@@ -41,24 +36,15 @@ def calculate_elo(df):
     
     for idx, row in df.iterrows():
         h_team, a_team, result = row['HomeTeam'], row['AwayTeam'], row['FTR']
-        
         h_elo = elo_ratings[h_team]
         a_elo = elo_ratings[a_team]
-        
         home_elos.append(h_elo)
         away_elos.append(a_elo)
         
-        # Expected scores
         e_h = 1 / (1 + 10 ** ((a_elo - h_elo) / 400))
-        e_a = 1 - e_h
-        
-        # Actual scores
         s_h = 1 if result == 'H' else (0.5 if result == 'D' else 0)
-        s_a = 1 - s_h
-        
-        # Update ratings
         elo_ratings[h_team] = h_elo + k_factor * (s_h - e_h)
-        elo_ratings[a_team] = a_elo + k_factor * (s_a - e_a)
+        elo_ratings[a_team] = a_elo + k_factor * ((1 - s_h) - (1 - e_h))
         
     df['Home_Elo'] = home_elos
     df['Away_Elo'] = away_elos
@@ -66,7 +52,6 @@ def calculate_elo(df):
     return df
 
 def calculate_rolling_stats(df, rolling_n=5):
-    # Long form for rolling stats
     home_stats = df[['Date', 'HomeTeam', 'FTHG', 'FTAG', 'HS', 'HST', 'HC']].copy()
     home_stats.columns = ['Date', 'Team', 'GoalsFor', 'GoalsAgainst', 'Shots', 'ShotsOnTarget', 'Corners']
     home_stats['IsHome'] = 1
@@ -85,13 +70,11 @@ def calculate_rolling_stats(df, rolling_n=5):
     
     team_stats = team_stats.dropna(subset=[f'Rolling_{s}' for s in stats_to_roll])
     
-    # Merge Home
     df_merged = df.merge(
         team_stats[team_stats['IsHome'] == 1][['Date', 'Team'] + [f'Rolling_{stat}' for stat in stats_to_roll]],
         left_on=['Date', 'HomeTeam'], right_on=['Date', 'Team'], how='inner'
     ).drop(columns=['Team']).rename(columns={f'Rolling_{s}': f'Home_Rolling_{s}' for s in stats_to_roll})
     
-    # Merge Away
     df_merged = df_merged.merge(
         team_stats[team_stats['IsHome'] == 0][['Date', 'Team'] + [f'Rolling_{stat}' for stat in stats_to_roll]],
         left_on=['Date', 'AwayTeam'], right_on=['Date', 'Team'], how='inner'
@@ -105,11 +88,9 @@ def train_and_evaluate(df):
         'Away_Rolling_GoalsFor', 'Away_Rolling_GoalsAgainst', 'Away_Rolling_Shots', 'Away_Rolling_ShotsOnTarget', 'Away_Rolling_Corners',
         'Home_Elo', 'Away_Elo', 'Elo_Diff'
     ]
-    
     le = LabelEncoder()
     df['Target'] = le.fit_transform(df['FTR'])
     
-    # Seasonal Split
     seasons = sorted(df['Season'].unique())
     test_season = seasons[-1]
     train_df = df[df['Season'] != test_season]
@@ -118,8 +99,7 @@ def train_and_evaluate(df):
     X_train, y_train = train_df[feature_cols], train_df['Target']
     X_test, y_test = test_df[feature_cols], test_df['Target']
     
-    # Random Forest
-    rf = RandomForestClassifier(n_estimators=200, min_samples_split=12, max_depth=10, random_state=42)
+    rf = RandomForestClassifier(n_estimators=100, min_samples_split=12, max_depth=10, random_state=42)
     rf.fit(X_train, y_train)
     
     return rf, le, feature_cols, test_df
