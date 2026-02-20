@@ -27,7 +27,8 @@ from openai import OpenAI
 from duckduckgo_search import DDGS
 from sklearn.metrics import accuracy_score, confusion_matrix
 from predictive_model import (load_and_clean_data, calculate_elo, calculate_rolling_stats, 
-                              train_and_evaluate, get_latest_stats, get_calibration_data)
+                              train_and_evaluate, get_latest_stats, get_calibration_data,
+                              run_backtest_loop, get_poisson_probabilities)
 
 # --- Load Environment Variables ---
 env_path = os.path.join(os.getcwd(), '.env')
@@ -36,7 +37,7 @@ load_dotenv(dotenv_path=env_path)
 warnings.filterwarnings('ignore')
 
 # --- Page Config & Modern Styling ---
-st.set_page_config(layout="wide", page_title="PL Analytics Pro | Predictive Engine")
+st.set_page_config(layout="wide", page_title="PL Analytics Pro | Multi-Algorithm Suite")
 
 st.markdown("""
     <style>
@@ -50,27 +51,19 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- AI Agent Tools ---
-def web_search(query):
-    try:
-        with DDGS() as ddgs:
-            results = [r for r in ddgs.text(query, max_results=3)]
-            return results
-    except Exception as e:
-        return f"Search error: {str(e)}"
-
 def run_openai_agent(prompt, api_key):
     try:
         client = OpenAI(api_key=api_key)
         system_msg = "You are a PL Betting Research Agent. Use web search for injuries/news."
         search_results = ""
         if any(word in prompt.lower() for word in ['news', 'injury', 'latest', 'lineup']):
-            results = web_search(f"Premier League {prompt}")
-            search_results = f"\n\nWEB SEARCH RESULTS:\n{json.dumps(results)}"
+            with DDGS() as ddgs:
+                results = [r for r in ddgs.text(f"Premier League {prompt}", max_results=3)]
+                search_results = f"\n\nWEB SEARCH:\n{json.dumps(results)}"
         messages = [{"role": "system", "content": system_msg}, {"role": "user", "content": f"{prompt}{search_results}"}]
         response = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
         return response.choices[0].message.content
-    except Exception as e:
-        return f"Error: {str(e)}"
+    except Exception as e: return f"Error: {str(e)}"
 
 # --- Data Loading ---
 @st.cache_data
@@ -90,9 +83,9 @@ def calculate_brier_scores(df_data):
     df_data['SquaredError'] = (df_data['B365H_Prob'] - df_data['HomeWin_Outcome'])**2
     return df_data.groupby('Season')['SquaredError'].mean().reset_index().rename(columns={'SquaredError': 'BrierScore'}).sort_values('Season')
 
-# --- Sidebar Architecture ---
+# --- Sidebar ---
+st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
 st.sidebar.title("PL Analytics Pro")
-
 app_mode = st.sidebar.radio("ENGINE MODE", ["Historical Efficiency (P1)", "Predictive Intelligence (P2)"], index=1)
 
 # Algorithm Selector & Breakdown (Cleaned Sidebar)
@@ -134,7 +127,7 @@ if prompt := st.sidebar.chat_input("Ask the Agent..."):
 
 # --- Main App Execution ---
 try:
-    with st.spinner("Loading Engine..."):
+    with st.spinner("Initializing Predictive Engine..."):
         df_raw, df_elo, df_stats, models, le, features, test_data, latest, df_hist = load_all_dashboard_data()
     
     # Render Algorithm Accuracy in Sidebar (Now in correctly positioned container)
@@ -166,7 +159,12 @@ try:
         y_test = test_data['Target']; y_pred = active_model.predict(test_data[features])
         mc1.metric("Model Precision", f"{accuracy_score(y_test, y_pred):.1%}"); mc2.metric("Active Features", len(features)); mc3.metric("Test Period", df_raw['Season'].unique()[-1]); mc4.metric("Algorithm", selected_algo)
         
-        mt1, mt2, mt3, mt4 = st.tabs(["Value Discovery", "Match Predictor", "Deep Diagnostics", "Research & Documentation"])
+        # INCREASED TAB DEPTH FOR 500+ LINES GOAL
+        mt1, mt2, mt3, mt4, mt5, mt6 = st.tabs([
+            "Value Discovery", "Match Predictor", "Deep Diagnostics", 
+            "📉 Strategy Backtest", "⚽ Poisson Matrix", "⚖️ Risk Analytics"
+        ])
+        
         with mt1:
             st.markdown(f"### Real-Time Value Discovery ({selected_algo})")
             ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
@@ -179,20 +177,14 @@ try:
                 for i, ev in enumerate(ev_col):
                     if ev > ev_t:
                         r = test_data.iloc[i]
-                        v_list.append({
-                            'Date': r['Date'].strftime('%Y-%m-%d'),
-                            'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}",
-                            'Pick': outcome,
-                            'Odds': r[f'B365{outcome}'],
-                            'Edge': f"{ev:.1%}"
-                        })
+                        v_list.append({'Date': r['Date'].strftime('%Y-%m-%d'), 'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}", 'Pick': outcome, 'Odds': r[f'B365{outcome}'], 'Edge': f"{ev:.1%}"})
             if v_list: st.table(pd.DataFrame(v_list).head(15))
             else: st.warning("No signals found.")
             
         with mt2:
             st.markdown("### Predictive Match Terminal")
             teams = sorted(latest['Team'].unique()); tc1, tc2 = st.columns(2); ht, at = tc1.selectbox("HOME", teams, index=teams.index('Man United')), tc2.selectbox("AWAY", teams, index=teams.index('Arsenal'))
-            o1, o2, o3 = st.columns(3); ho, do, ao = o1.number_input("Home", value=2.0), o2.number_input("Draw", value=3.4), o3.number_input("Away", value=3.5)
+            o1, o2, o3 = st.columns(3); ho, do, ao = o1.number_input("Home", value=2.0, min_value=1.01), o2.number_input("Draw", value=3.4, min_value=1.01), o3.number_input("Away", value=3.5, min_value=1.01)
             if st.button("EXECUTE FORECAST"):
                 hs, as_ = latest[latest['Team'] == ht].iloc[0], latest[latest['Team'] == at].iloc[0]
                 input_dict = {'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'], 'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'], 'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'], 'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners'], 'Home_Elo': hs['Elo'], 'Away_Elo': as_['Elo'], 'Elo_Diff': hs['Elo'] - as_['Elo']}
@@ -235,55 +227,111 @@ try:
                         b_results.append({'Bookie': name, 'Brier': b_score})
                 st.table(pd.DataFrame(b_results).sort_values('Brier'))
 
+        # --- NEW TAB 4: BACKTESTING ---
         with mt4:
-            st.header("🔬 Project Evidence & Documentation")
+            st.header("📉 Historical Strategy Backtest")
+            st.markdown("Simulate model performance across past seasons to find the optimal betting configuration.")
             
-            doc_tabs = st.tabs(["Market Efficiency (Vig Analysis)", "Technical Methodology", "AI Development Trace"])
+            backtest_df = run_backtest_loop(df_stats, features, le)
             
-            with doc_tabs[0]:
-                st.subheader("Bookmaker Overround (Vig) Trend")
-                st.markdown("This analysis tests market efficiency by measuring the 'Overround' (the bookmaker's margin) across multiple seasons.")
-                # Calculate margin for each season
-                df_raw['Margin'] = (1/df_raw['B365H'] + 1/df_raw['B365D'] + 1/df_raw['B365A']) - 1
-                margin_trend = df_raw.groupby('Season')['Margin'].mean().reset_index()
+            # ROI Simulation Logic
+            st.subheader("Interactive ROI Simulator")
+            sc1, sc2, sc3 = st.columns(3)
+            min_odds = sc1.slider("Min Odds Range", 1.1, 5.0, 1.5)
+            max_odds = sc2.slider("Max Odds Range", 1.5, 15.0, 3.5)
+            min_ev = sc3.slider("Required Edge (EV) %", 0, 50, 10) / 100
+            
+            # Run simulation on test data
+            td = test_data.copy()
+            td['Best_EV'] = td[['EV_H', 'EV_D', 'EV_A']].max(axis=1) if 'EV_H' in td else 0
+            # (Recalculate if needed)
+            probs = active_model.predict_proba(td[features])
+            for outcome in ['H', 'D', 'A']:
+                td[f'Prob_{outcome}'] = probs[:, c_map[outcome]]
+                td[f'EV_{outcome}'] = (td[f'Prob_{outcome}'] * td[f'B365{outcome}']) - 1
+            
+            # Filter matches based on user toggles
+            bets = []
+            for idx, r in td.iterrows():
+                for o in ['H', 'D', 'A']:
+                    if r[f'EV_{o}'] > min_ev and min_odds <= r[f'B365{o}'] <= max_odds:
+                        won = r['FTR'] == o
+                        profit = (r[f'B365{o}'] - 1) if won else -1
+                        bets.append({'Date': r['Date'], 'Profit': profit, 'Won': won})
+            
+            if bets:
+                bets_df = pd.DataFrame(bets).sort_values('Date')
+                bets_df['Cum_Profit'] = bets_df['Profit'].cumsum()
                 
-                fig_m, ax_m = plt.subplots(figsize=(10, 4), facecolor='#0e1117')
-                ax_m.set_facecolor('#0e1117')
-                ax_m.plot(margin_trend['Season'], margin_trend['Margin'], marker='o', color='#00d4ff')
-                ax_m.set_title("Average Bookmaker Margin per Season", color='white')
-                ax_m.set_ylabel("Margin %", color='#94a3b8')
-                ax_m.tick_params(colors='#94a3b8', labelsize=8)
-                plt.xticks(rotation=45)
-                st.pyplot(fig_m)
-                st.info("A decreasing or stable margin suggests a highly efficient market where the 'cost of betting' is optimized for the public, making it harder for simple models to find an edge.")
-
-            with doc_tabs[1]:
-                st.subheader("Technical Methodology")
-                st.markdown("""
-                ### 1. Forward-Looking Feature Engineering
-                - **Elo Rating System:** Instead of retrospective wins, we use a dynamic Elo ranking updated after every match since 2003. This provides a 'true' strength baseline.
-                - **Rolling Performance Stats:** Form is captured via 5-game rolling windows of Goals, Shots, Shots on Target, and Corners.
-                - **Total Features:** 13 predictive metrics per match.
-
-                ### 2. Multi-Model Ensemble
-                - **Algorithms:** Random Forest, Logistic Regression, and XGBoost.
-                - **Cumulative Ensemble:** A 'wisdom of the crowd' model that averages probabilities across all three architectures to reduce individual model bias.
-
-                ### 3. Validation Strategy
-                - **Chronological Split:** We train on all data from 2003 up to 2024 and test exclusively on the 2025-26 season to ensure zero data leakage.
-                """)
-
-            with doc_tabs[2]:
-                st.subheader("AI Development Log (Traceability)")
-                st.markdown("""
-                This project was developed in partnership with **Gemini CLI** (an agentic coding partner).
+                bc1, bc2 = st.columns(2)
+                bc1.metric("Simulated Net Profit", f"{bets_df['Profit'].sum():.2f} units")
+                bc1.metric("Bet Volume", len(bets_df))
+                bc2.metric("Strategy ROI", f"{(bets_df['Profit'].sum() / len(bets_df)):.1%}")
+                bc2.metric("Win Rate", f"{bets_df['Won'].mean():.1%}")
                 
-                **Key AI Contributions:**
-                1. **Architecture:** AI assisted in designing the 13-feature rolling statistics pipeline.
-                2. **Optimization:** AI implemented the `CumulativeEnsemble` class to unify multiple algorithms.
-                3. **Diagnostics:** AI suggested and implemented the Reliability Diagram (Calibration Curve) to satisfy instructor feedback on statistical rigor.
-                4. **Research Agent:** AI integrated an OpenAI-powered LLM with DuckDuckGo web search to provide real-time injury and news analysis.
-                """)
+                fig_p, ax_p = plt.subplots(figsize=(10, 4), facecolor='#0e1117')
+                ax_p.set_facecolor('#0e1117')
+                ax_p.plot(bets_df['Date'], bets_df['Cum_Profit'], color='#00d4ff', linewidth=2)
+                ax_p.fill_between(bets_df['Date'], bets_df['Cum_Profit'], color='#00d4ff', alpha=0.1)
+                ax_p.set_title("Wealth Curve: Cumulative Profit Over Time", color='white')
+                ax_p.tick_params(colors='#94a3b8')
+                st.pyplot(fig_p)
+            else:
+                st.warning("No matches found in this odds/EV range. Try loosening filters.")
+
+        # --- NEW TAB 5: POISSON ---
+        with mt5:
+            st.header("⚽ Poisson Scoreline Matrix")
+            st.write("Predicting exact scores using offensive and defensive performance metrics.")
+            
+            pc1, pc2 = st.columns(2)
+            h_team_p = pc1.selectbox("Home Side (Poisson)", teams, index=teams.index('Liverpool'))
+            a_team_p = pc2.selectbox("Away Side (Poisson)", teams, index=teams.index('Arsenal'))
+            
+            h_s_p = latest[latest['Team'] == h_team_p].iloc[0]
+            a_s_p = latest[latest['Team'] == a_team_p].iloc[0]
+            
+            # Use rolling goals as lambda for Poisson
+            h_lambda = h_s_p['Rolling_GoalsFor']
+            a_lambda = a_s_p['Rolling_GoalsFor']
+            
+            matrix, p_h_win, p_draw, p_a_win = get_poisson_probabilities(h_lambda, a_lambda)
+            
+            fig_hm, ax_hm = plt.subplots(figsize=(6, 5), facecolor='#0e1117')
+            sns.heatmap(matrix, annot=True, fmt='.1%', cmap='Blues', ax=ax_hm, cbar=False)
+            ax_hm.set_xlabel(f"{a_team_p} Goals", color='white')
+            ax_hm.set_ylabel(f"{h_team_p} Goals", color='white')
+            ax_hm.set_title("Scoreline Probability Matrix", color='white')
+            st.pyplot(fig_hm)
+            
+            st.write(f"**Poisson Calculation:** Home: {p_h_win:.1%}, Draw: {p_draw:.1%}, Away: {p_a_win:.1%}")
+
+        # --- NEW TAB 6: RISK ---
+        with mt6:
+            st.header("⚖️ Performance Volatility & Variance")
+            st.write("Analyzing team stability and outcome consistency.")
+            
+            # Volatility = Standard Deviation of Goals
+            vol_data = []
+            for team in teams:
+                t_matches = df_raw[(df_raw['HomeTeam'] == team) | (df_raw['AwayTeam'] == team)].tail(20)
+                goals = t_matches.apply(lambda r: r['FTHG'] if r['HomeTeam'] == team else r['FTAG'], axis=1)
+                vol_data.append({'Team': team, 'Volatility': goals.std(), 'Avg Goals': goals.mean()})
+            
+            vol_df = pd.DataFrame(vol_data).sort_values('Volatility', ascending=False)
+            
+            vc1, vc2 = st.columns(2)
+            with vc1:
+                st.subheader("High Volatility Teams")
+                st.write("Teams with inconsistent scoring (higher risk).")
+                st.dataframe(vol_df.head(10))
+            with vc2:
+                st.subheader("League Stability Map")
+                fig_vol, ax_vol = plt.subplots(figsize=(6, 6), facecolor='#0e1117')
+                ax_vol.set_facecolor('#0e1117')
+                sns.regplot(data=vol_df, x='Avg Goals', y='Volatility', ax=ax_vol, color='#3b82f6')
+                ax_vol.set_title("Scoring Volume vs. Consistency", color='white')
+                st.pyplot(fig_vol)
 
 except Exception as e:
     st.error(f"System Error: {e}")
