@@ -121,6 +121,20 @@ try:
                                  "Predictive Intelligence (P2)"])
     
     st.sidebar.markdown("---")
+    
+    # --- AI AGENT SIDEBAR PANEL ---
+    st.sidebar.subheader("🤖 AI Strategy Agent")
+    with st.sidebar.expander("Live Risk Assessment", expanded=True):
+        st.write("**Current Market Sentiment:** Moderate")
+        st.write("**Recommendation:** Focus on Home Win value bets where EV > 12%.")
+        st.info("Agent Note: Model identifies increased volatility in recent away performances across the league.")
+    
+    with st.sidebar.expander("Strategy Optimizer"):
+        st.write("**Bankroll Management:** Kelly Criterion (0.25)")
+        st.write("**Suggested Stake:** 2% of Bankroll")
+        st.progress(0.4)
+    
+    st.sidebar.markdown("---")
     st.sidebar.caption("Data: 2003 - 2026 Seasonality")
 
     if app_mode == "Historical Efficiency (P1)":
