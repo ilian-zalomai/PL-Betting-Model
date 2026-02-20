@@ -27,3 +27,5 @@ streamlit
 seaborn
 google-genai
 python-dotenv
+openai
+duckduckgo-search

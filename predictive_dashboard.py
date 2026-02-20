@@ -5,30 +5,74 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
 import os
+import json
+from dotenv import load_dotenv
+from openai import OpenAI
+from duckduckgo_search import DDGS
 from sklearn.metrics import accuracy_score, confusion_matrix
 from predictive_model import (load_and_clean_data, calculate_elo, calculate_rolling_stats, 
                               train_and_evaluate, get_latest_stats, get_calibration_data)
 
+# --- Load Environment Variables ---
+env_path = os.path.join(os.getcwd(), '.env')
+load_dotenv(dotenv_path=env_path)
+
 warnings.filterwarnings('ignore')
 
-# --- Configuration & Modern Styling ---
-st.set_page_config(layout="wide", page_title="PL Analytics Pro | Predictive Engine")
+# --- Page Config & Styling ---
+st.set_page_config(layout="wide", page_title="PL Analytics Pro | AI Agent")
 
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; color: #fafafa; }
     [data-testid="stMetricValue"] { font-size: 2rem; font-weight: 700; color: #00d4ff; }
-    [data-testid="stMetricLabel"] { font-size: 0.9rem; color: #94a3b8; text-transform: uppercase; }
     div[data-testid="metric-container"] { background-color: #1e293b; border: 1px solid #334155; padding: 20px; border-radius: 12px; }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: #1e293b; padding: 8px; border-radius: 12px; }
-    .stTabs [data-baseweb="tab"] { height: 45px; color: #94a3b8; border: none; padding: 0 24px; }
     .stTabs [aria-selected="true"] { background-color: #3b82f6 !important; color: white !important; }
-    h1, h2, h3 { color: #f1f5f9; }
     [data-testid="stSidebar"] { background-color: #0f172a; border-right: 1px solid #334155; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Data Loading (Shared and Cached) ---
+# --- AI Agent Tools ---
+def web_search(query):
+    """Performs a web search using DuckDuckGo."""
+    try:
+        with DDGS() as ddgs:
+            results = [r for r in ddgs.text(query, max_results=3)]
+            return results
+    except Exception as e:
+        return f"Search error: {str(e)}"
+
+def run_openai_agent(prompt, api_key):
+    """Runs an OpenAI agent that can search the web."""
+    try:
+        client = OpenAI(api_key=api_key)
+        
+        # Step 1: Check if search is needed
+        system_msg = "You are a PL Betting Research Agent. If the user asks for news, injuries, or recent events, use web search. Otherwise, answer based on your knowledge."
+        
+        # Simplified "Agent" logic for Streamlit performance:
+        # We'll automatically search if keywords like 'news', 'injury', 'latest' are present
+        search_results = ""
+        if any(word in prompt.lower() for word in ['news', 'injury', 'latest', 'lineup', 'missing']):
+            with st.spinner("Searching the web..."):
+                results = web_search(f"Premier League {prompt}")
+                search_results = f"\n\nWEB SEARCH RESULTS:\n{json.dumps(results, indent=2)}"
+
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": f"{prompt}{search_results}"}
+        ]
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini", # Efficient and smart
+            messages=messages
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"OpenAI Error: {str(e)}"
+
+# --- Data Loading ---
 @st.cache_data
 def load_all_dashboard_data():
     df_raw = load_and_clean_data('all_seasons.csv')
@@ -36,42 +80,52 @@ def load_all_dashboard_data():
     df_stats = calculate_rolling_stats(df_elo)
     model, le, features, test_data = train_and_evaluate(df_stats)
     latest_stats = get_latest_stats(df_stats)
-    
-    # Process for Project 1 logic
     df_hist = df_raw.copy()
     df_hist.dropna(subset=['Season', 'FTR', 'B365H'], inplace=True)
     df_hist['B365H_Prob'] = 1 / df_hist['B365H']
     df_hist['HomeWin_Outcome'] = (df_hist['FTR'] == 'H').astype(int)
-    
     return df_raw, df_elo, df_stats, model, le, features, test_data, latest_stats, df_hist
 
-# --- Original Project 1 Logic ---
 def calculate_brier_scores(df_data):
     df_data['SquaredError'] = (df_data['B365H_Prob'] - df_data['HomeWin_Outcome'])**2
-    brier_scores = df_data.groupby('Season')['SquaredError'].mean().reset_index()
-    brier_scores.rename(columns={'SquaredError': 'BrierScore'}, inplace=True)
-    return brier_scores.sort_values('Season')
+    return df_data.groupby('Season')['SquaredError'].mean().reset_index().rename(columns={'SquaredError': 'BrierScore'}).sort_values('Season')
+
+# --- Sidebar Architecture ---
+st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
+st.sidebar.title("PL Analytics Pro")
+
+app_mode = st.sidebar.radio("ENGINE MODE", ["Historical Efficiency (P1)", "Predictive Intelligence (P2)"], index=1)
+
+# OpenAI Config
+st.sidebar.markdown("---")
+st.sidebar.subheader("🤖 OpenAI Research Agent")
+stored_openai_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+openai_api_key = st.sidebar.text_input("OpenAI API Key", value=stored_openai_key if stored_openai_key else "", type="password")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "assistant", "content": "I am your OpenAI Research Agent. I can search the web for injuries or team news. Ask me anything!"}]
+
+for msg in st.session_state.messages:
+    with st.sidebar.chat_message(msg["role"]): st.write(msg["content"])
+
+if prompt := st.sidebar.chat_input("Ask the Agent..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.sidebar.chat_message("user"): st.write(prompt)
+    with st.sidebar.chat_message("assistant"):
+        if openai_api_key:
+            response = run_openai_agent(prompt, openai_api_key)
+        else:
+            response = "Please provide an OpenAI API Key to enable the Research Agent."
+        st.write(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
 
 # --- Main App Execution ---
 try:
-    with st.spinner("Initializing Predictive Engine..."):
+    with st.spinner("Loading Predictive Engine..."):
         df_raw, df_elo, df_stats, model, le, features, test_data, latest, df_hist = load_all_dashboard_data()
-
-    # Sidebar Architecture
-    st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
-    st.sidebar.title("PL Analytics Pro")
-    
-    app_mode = st.sidebar.radio("ENGINE MODE", 
-                                ["Historical Efficiency (P1)", "Predictive Intelligence (P2)"],
-                                index=0)
-    
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Data: 2003 - 2026 Seasonality")
 
     if app_mode == "Historical Efficiency (P1)":
         st.title("📊 Market Efficiency Analysis")
-        st.markdown("#### Project 1: Analyzing Bookmaker Performance & Brier Scores")
-        
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Matches", f"{len(df_hist):,}")
         m2.metric("Seasons", len(df_hist['Season'].unique()))
@@ -80,7 +134,6 @@ try:
 
         t1, t2 = st.tabs(["Market Accuracy Trend", "Historical Team Database"])
         with t1:
-            st.markdown("### Brier Score Decay Curve")
             b_scores = calculate_brier_scores(df_hist)
             fig1, ax1 = plt.subplots(figsize=(10, 4), facecolor='#0e1117')
             ax1.set_facecolor('#0e1117')
@@ -88,9 +141,7 @@ try:
             ax1.tick_params(colors='#94a3b8', labelsize=8)
             plt.xticks(rotation=45)
             st.pyplot(fig1)
-        
         with t2:
-            st.markdown("### Team Historical Performance")
             c1, c2 = st.columns(2)
             sel_s = c1.selectbox("Season", df_hist['Season'].unique()[::-1])
             sel_t = c2.selectbox("Team", sorted(df_hist[df_hist['Season'] == sel_s]['HomeTeam'].unique()))
@@ -99,8 +150,6 @@ try:
 
     else: # Predictive Intelligence (P2)
         st.title("🤖 Predictive Intelligence Engine")
-        st.markdown("#### Project 2: Forward-Looking Machine Learning & Value Discovery")
-        
         mc1, mc2, mc3, mc4 = st.columns(4)
         y_test = test_data['Target']
         y_pred = model.predict(test_data[features])
@@ -111,7 +160,6 @@ try:
 
         mt1, mt2, mt3 = st.tabs(["Value Discovery", "Match Predictor", "Deep Diagnostics"])
         with mt1:
-            st.markdown("### Real-Time Value Discovery")
             ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
             probs = model.predict_proba(test_data[features])
             c_map = {cls: i for i, cls in enumerate(le.classes_)}
@@ -127,7 +175,6 @@ try:
             else: st.warning("No signals found.")
             
         with mt2:
-            st.markdown("### Predictive Match Terminal")
             teams = sorted(latest['Team'].unique())
             tc1, tc2 = st.columns(2)
             ht, at = tc1.selectbox("HOME", teams, index=teams.index('Man United')), tc2.selectbox("AWAY", teams, index=teams.index('Arsenal'))
@@ -137,15 +184,15 @@ try:
                 hs, as_ = latest[latest['Team'] == ht].iloc[0], latest[latest['Team'] == at].iloc[0]
                 inp = pd.DataFrame([{'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'], 'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'], 'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'], 'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners'], 'Home_Elo': hs['Elo'], 'Away_Elo': as_['Elo'], 'Elo_Diff': hs['Elo'] - as_['Elo']}])
                 rp = model.predict_proba(inp[features])[0]
-                fig_m, ax_m = plt.subplots(figsize=(7, 3), facecolor='#0e1117')
+                fig_m, ax_m = plt.subplots(figsize=(7, 3.5), facecolor='#0e1117')
                 ax_m.set_facecolor('#0e1117')
                 ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
+                ax_m.tick_params(colors='#94a3b8')
                 st.pyplot(fig_m)
 
         with mt3:
             st.markdown("### Model Reliability & Market Benchmark")
             diag_c1, diag_c2 = st.columns(2)
-            
             with diag_c1:
                 st.subheader("Reliability (Calibration)")
                 prob_true, prob_pred = get_calibration_data(model, test_data[features], y_test, le)
@@ -157,7 +204,6 @@ try:
                 ax_cal.set_xlabel("Predicted Probability", color='white')
                 ax_cal.tick_params(colors='white')
                 st.pyplot(fig_cal)
-            
             with diag_c2:
                 st.subheader("Market Comparison (Brier)")
                 bookies = {'B365': 'B365H', 'Bwin': 'BWH', 'VCBet': 'VCH', 'Model': 'Prob_H'}
