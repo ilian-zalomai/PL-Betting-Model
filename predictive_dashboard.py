@@ -144,7 +144,12 @@ try:
         st.title(f"🤖 Intelligence Engine: {selected_algo}")
         mc1, mc2, mc3, mc4 = st.columns(4)
         y_test = test_data['Target']; y_pred = active_model.predict(test_data[features])
-        mc1.metric("Model Precision", f"{accuracy_score(y_test, y_pred):.1%}"); mc2.metric("Active Features", len(features)); mc3.metric("Test Period", df_raw['Season'].unique()[-1]); mc4.metric("Algorithm", selected_algo)
+        
+        mc1.metric("Model Precision", f"{accuracy_score(y_test, y_pred):.1%}")
+        mc2.metric("Active Features", len(features))
+        mc3.metric("Test Period", df_raw['Season'].unique()[-1])
+        mc4.metric("Algorithm", selected_algo)
+        
         mt1, mt2, mt3 = st.tabs(["Value Discovery", "Match Predictor", "Deep Diagnostics"])
         with mt1:
             st.markdown(f"### Real-Time Value Discovery ({selected_algo})")
@@ -158,7 +163,13 @@ try:
                 for i, ev in enumerate(ev_col):
                     if ev > ev_t:
                         r = test_data.iloc[i]
-                        v_list.append({'Date': r['Date'].strftime('%Y-%m-%d'), 'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}", 'Pick': outcome, 'Odds': r[f'B365{outcome}'], 'Edge': f"{ev:.1%}"})
+                        v_list.append({
+                            'Date': r['Date'].strftime('%Y-%m-%d'),
+                            'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}",
+                            'Pick': outcome,
+                            'Odds': r[f'B365{outcome}'],
+                            'Edge': f"{ev:.1%}"
+                        })
             if v_list: st.table(pd.DataFrame(v_list).head(15))
             else: st.warning("No signals found.")
         with mt2:
