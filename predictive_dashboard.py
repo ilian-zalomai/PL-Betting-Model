@@ -104,6 +104,16 @@ if app_mode == "Predictive Intelligence (P2)":
     selected_algo = st.sidebar.selectbox("Active Model", ["Random Forest", "Logistic Regression", "XGBoost", "Cumulative Ensemble"])
     st.sidebar.subheader("📊 Algorithm Breakdown")
     algo_container = st.sidebar.container()
+    
+    st.sidebar.subheader("🧠 Model Features")
+    with st.sidebar.expander("View 12 Active Features"):
+        st.write("**Offensive Stats (Rolling 5):**")
+        st.write("- Goals For, Shots, Shots on Target, Corners")
+        st.write("**Defensive Stats (Rolling 5):**")
+        st.write("- Goals Against")
+        st.write("**Strength Ratings:**")
+        st.write("- Home Elo, Away Elo, Elo Difference")
+        st.caption("Applied to both Home & Away teams.")
 
 # OpenAI Research Agent (Silent Loading)
 st.sidebar.markdown("---")
