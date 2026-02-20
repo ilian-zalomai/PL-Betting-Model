@@ -167,4 +167,43 @@ try:
             o1, o2, o3 = st.columns(3); ho, do, ao = o1.number_input("Home", value=2.0), o2.number_input("Draw", value=3.4), o3.number_input("Away", value=3.5)
             if st.button("EXECUTE FORECAST"):
                 hs, as_ = latest[latest['Team'] == ht].iloc[0], latest[latest['Team'] == at].iloc[0]
-                inp = pd.DataFrame([{'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'], 'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'], 'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'], 'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners'], 'Home_Elo': hs['Elo'], 'Away_Elo': as_['Elo'], 'Elo_Diff': hs['Elo'] - as_[
+                
+                # Input data for prediction
+                input_dict = {
+                    'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'],
+                    'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'],
+                    'Home_Rolling_Shots': hs['Rolling_Shots'],
+                    'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'],
+                    'Home_Rolling_Corners': hs['Rolling_Corners'],
+                    'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'],
+                    'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'],
+                    'Away_Rolling_Shots': as_['Rolling_Shots'],
+                    'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'],
+                    'Away_Rolling_Corners': as_['Rolling_Corners'],
+                    'Home_Elo': hs['Elo'],
+                    'Away_Elo': as_['Elo'],
+                    'Elo_Diff': hs['Elo'] - as_['Elo']
+                }
+                inp = pd.DataFrame([input_dict])
+                rp = active_model.predict_proba(inp[features])[0]
+                
+                p_h, p_d, p_a = rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]
+                b_h, b_d, b_a = 1/ho, 1/do, 1/ao
+                st.divider(); res_col1, res_col2 = st.columns([3, 2])
+                with res_col1:
+                    st.subheader("Model vs. Market")
+                    comp_df = pd.DataFrame({'Outcome': ['Home', 'Draw', 'Away'], 'Model': [p_h, p_d, p_a], 'Market': [b_h, b_d, b_a]})
+                    st.table(comp_df.style.format({'Model': '{:.1%}', 'Market': '{:.1%}'}))
+                    fig_m, ax_m = plt.subplots(figsize=(7, 3.5), facecolor='#0e1117'); ax_m.set_facecolor('#0e1117'); ax_m.bar(['Home', 'Draw', 'Away'], [p_h, p_d, p_a], color=['#ef4444', '#3b82f6', '#10b981']); st.pyplot(fig_m)
+                with res_col2:
+                    st.subheader("Strategic Verdict")
+                    evs = [(p_h*ho)-1, (p_d*do)-1, (p_a*ao)-1]; best_idx = np.argmax(evs)
+                    if evs[best_idx] > 0.05: st.success(f"🎯 **RECOMMENDATION:** {['Home', 'Draw', 'Away'][best_idx]} (Edge: {evs[best_idx]:.1%})")
+                    else: st.warning("⚠️ MARKET EFFICIENT")
+        with mt3:
+            st.subheader(f"Reliability ({selected_algo})")
+            prob_true, prob_pred = get_calibration_data(active_model, test_data[features], y_test, le)
+            fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117'); ax_cal.set_facecolor('#0e1117'); ax_cal.plot([0, 1], [0, 1], "k:"); ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6'); st.pyplot(fig_cal)
+
+except Exception as e:
+    st.error(f"System Error: {e}")
