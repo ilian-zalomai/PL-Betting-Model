@@ -98,11 +98,13 @@ app_mode = st.sidebar.radio("ENGINE MODE", ["Historical Efficiency (P1)", "Predi
 
 # Algorithm Selector & Breakdown (Cleaned Sidebar)
 selected_algo = "Random Forest"
+algo_container = None
 if app_mode == "Predictive Intelligence (P2)":
     st.sidebar.markdown("---")
     st.sidebar.subheader("⚙️ Algorithm Config")
     selected_algo = st.sidebar.selectbox("Active Model", ["Random Forest", "Logistic Regression", "XGBoost", "Cumulative Ensemble"])
     st.sidebar.subheader("📊 Algorithm Breakdown")
+    algo_container = st.sidebar.container()
 
 # OpenAI Research Agent (Silent Loading)
 st.sidebar.markdown("---")
@@ -126,12 +128,13 @@ try:
     with st.spinner("Loading Engine..."):
         df_raw, df_elo, df_stats, models, le, features, test_data, latest, df_hist = load_all_dashboard_data()
     
-    # Render Algorithm Accuracy in Sidebar
-    if app_mode == "Predictive Intelligence (P2)":
-        y_true = test_data['Target']
-        for name, m in models.items():
-            acc = accuracy_score(y_true, m.predict(test_data[features]))
-            st.sidebar.write(f"**{name}:** `{acc:.1%}`")
+    # Render Algorithm Accuracy in Sidebar (Now in correctly positioned container)
+    if app_mode == "Predictive Intelligence (P2)" and algo_container:
+        with algo_container:
+            y_true = test_data['Target']
+            for name, m in models.items():
+                acc = accuracy_score(y_true, m.predict(test_data[features]))
+                st.write(f"**{name}:** `{acc:.1%}`")
 
     active_model = models[selected_algo]
 
