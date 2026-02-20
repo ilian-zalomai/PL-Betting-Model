@@ -7,6 +7,7 @@ import warnings
 import os
 from dotenv import load_dotenv
 from google import genai
+from sklearn.metrics import accuracy_score
 from predictive_model import load_and_clean_data, calculate_rolling_stats, train_and_evaluate, get_latest_stats
 
 # --- Load Environment Variables ---
@@ -214,7 +215,4 @@ try:
                 fig_m, ax_m = plt.subplots(figsize=(7, 3), facecolor='#0e1117')
                 ax_m.set_facecolor('#0e1117')
                 ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
-                st.pyplot(fig_m)
-
-except Exception as e:
-    st.error(f"System Error: {e}")
+                st
