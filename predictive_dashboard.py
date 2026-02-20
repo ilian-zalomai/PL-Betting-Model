@@ -157,7 +157,7 @@ try:
             sel_t = c2.selectbox("Team", sorted(s_df['HomeTeam'].unique()))
             
             t_df = s_df[(s_df['HomeTeam'] == sel_t) | (s_df['AwayTeam'] == sel_t)]
-            st.dataframe(t_df[['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR']].sort_values('Date', ascending=False), use_container_width=True)
+            st.dataframe(t_df[['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR']].sort_values('Date', ascending=False), width='stretch')
 
     else: # Predictive Intelligence (P2)
         st.title("🤖 Predictive Intelligence Engine")
