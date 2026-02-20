@@ -91,7 +91,6 @@ def calculate_brier_scores(df_data):
     return df_data.groupby('Season')['SquaredError'].mean().reset_index().rename(columns={'SquaredError': 'BrierScore'}).sort_values('Season')
 
 # --- Sidebar Architecture ---
-st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
 st.sidebar.title("PL Analytics Pro")
 
 app_mode = st.sidebar.radio("ENGINE MODE", ["Historical Efficiency (P1)", "Predictive Intelligence (P2)"], index=1)
