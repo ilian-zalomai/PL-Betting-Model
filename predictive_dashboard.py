@@ -6,11 +6,10 @@ import seaborn as sns
 import warnings
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 from predictive_model import load_and_clean_data, calculate_rolling_stats, train_and_evaluate, get_latest_stats
 
 # --- Load Environment Variables ---
-# Specify exact path to ensure it finds it
 env_path = os.path.join(os.getcwd(), '.env')
 load_dotenv(dotenv_path=env_path)
 
@@ -18,12 +17,6 @@ warnings.filterwarnings('ignore')
 
 # --- Page Config & Styling ---
 st.set_page_config(layout="wide", page_title="AI Predictive Engine | PL Analytics")
-
-# Debug info (hidden by default)
-if os.getenv("GEMINI_API_KEY"):
-    st.sidebar.caption("✅ System: .env key detected")
-else:
-    st.sidebar.caption("⚠️ System: No .env key found")
 
 st.markdown("""
     <style>
@@ -36,11 +29,14 @@ st.markdown("""
 # --- LLM Helper Functions ---
 def get_llm_response(prompt, api_key):
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        client = genai.Client(api_key=api_key)
         system_context = "You are a Premier League Sports Betting AI Agent. You are an expert in Kelly Criterion, Elo Ratings, and football statistics. Provide concise, professional advice."
         full_prompt = f"{system_context}\n\nUser: {prompt}"
-        response = model.generate_content(full_prompt)
+        
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=full_prompt
+        )
         return response.text
     except Exception as e:
         return f"Error connecting to Gemini: {str(e)}"
@@ -57,23 +53,25 @@ def load_all_data():
 st.sidebar.title("PL Analytics Pro")
 st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
 
-# LLM Configuration Logic
+# Debug info for API Key
+if os.getenv("GEMINI_API_KEY"):
+    st.sidebar.caption("✅ System: .env key detected")
+else:
+    st.sidebar.caption("⚠️ System: No .env key found")
+
+# LLM Configuration
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔑 LLM Configuration")
-
-# 1. Try to get from .env or streamlit secrets first
 stored_key = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
-
-# 2. Provide an input field that defaults to the stored key
 gemini_api_key = st.sidebar.text_input(
     "Gemini API Key", 
     value=stored_key if stored_key else "", 
     type="password", 
-    help="Key loaded from .env or Secrets if present. Get one at https://ai.google.dev/"
+    help="Get one at https://ai.google.dev/"
 )
 
 if not gemini_api_key:
-    st.sidebar.warning("Agent Offline: Enter your Gemini API Key to wake it up.")
+    st.sidebar.warning("Agent Offline: Enter your Gemini API Key.")
 else:
     st.sidebar.success("Agent Online: Live LLM Active")
 
@@ -98,7 +96,7 @@ if prompt := st.sidebar.chat_input("Ask the Agent..."):
             with st.spinner("Analyzing..."):
                 response = get_llm_response(prompt, gemini_api_key)
         else:
-            response = "I am currently in 'Offline Mode'. Please provide a Gemini API Key in the sidebar or .env file."
+            response = "Please provide a Gemini API Key to enable live LLM reasoning."
         
         st.write(response)
         st.session_state.messages.append({"role": "assistant", "content": response})

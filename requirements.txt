@@ -25,5 +25,5 @@ urllib3==2.6.3
 zipp==3.23.0
 streamlit
 seaborn
-google-generativeai
+google-genai
 python-dotenv
