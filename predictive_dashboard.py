@@ -153,8 +153,10 @@ try:
         mc2.metric("Active Features", len(features))
         mc3.metric("Test Period", df_raw['Season'].unique()[-1])
         mc4.metric("Algorithm", "Random Forest")
+        
         mt1, mt2, mt3 = st.tabs(["Value Discovery", "Match Predictor", "Deep Diagnostics"])
         with mt1:
+            st.markdown("### Real-Time Value Discovery")
             ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
             probs = model.predict_proba(test_data[features])
             c_map = {cls: i for i, cls in enumerate(le.classes_)}
@@ -168,7 +170,9 @@ try:
                         v_list.append({'Date': r['Date'].strftime('%Y-%m-%d'), 'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}", 'Pick': outcome, 'Odds': r[f'B365{outcome}'], 'Edge': f"{ev:.1%}"})
             if v_list: st.table(pd.DataFrame(v_list).head(15))
             else: st.warning("No signals found.")
+            
         with mt2:
+            st.markdown("### Predictive Match Terminal")
             teams = sorted(latest['Team'].unique())
             tc1, tc2 = st.columns(2)
             ht, at = tc1.selectbox("HOME", teams, index=teams.index('Man United')), tc2.selectbox("AWAY", teams, index=teams.index('Arsenal'))
@@ -183,14 +187,34 @@ try:
                 ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
                 ax_m.tick_params(colors='#94a3b8')
                 st.pyplot(fig_m)
+
         with mt3:
-            st.subheader("Reliability (Calibration)")
-            prob_true, prob_pred = get_calibration_data(model, test_data[features], y_test, le)
-            fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117')
-            ax_cal.set_facecolor('#0e1117')
-            ax_cal.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
-            ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6', label="Random Forest")
-            st.pyplot(fig_cal)
+            st.markdown("### Model Reliability & Market Benchmark")
+            diag_c1, diag_c2 = st.columns(2)
+            with diag_c1:
+                st.subheader("Reliability (Calibration)")
+                prob_true, prob_pred = get_calibration_data(model, test_data[features], y_test, le)
+                fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117')
+                ax_cal.set_facecolor('#0e1117')
+                ax_cal.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
+                ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6', label="Random Forest")
+                ax_cal.set_ylabel("Actual Frequency", color='white')
+                ax_cal.set_xlabel("Predicted Probability", color='white')
+                ax_cal.tick_params(colors='white')
+                st.pyplot(fig_cal)
+            with diag_c2:
+                st.subheader("Market Comparison (Brier)")
+                bookies = {'B365': 'B365H', 'Bwin': 'BWH', 'VCBet': 'VCH', 'Model': 'Prob_H'}
+                test_data['Prob_H'] = model.predict_proba(test_data[features])[:, c_map['H']]
+                test_data['HW_Actual'] = (test_data['FTR'] == 'H').astype(int)
+                b_results = []
+                for name, col in bookies.items():
+                    if col in test_data.columns:
+                        tmp = test_data.dropna(subset=[col])
+                        if name == 'Model': b_score = np.mean((tmp[col] - tmp['HW_Actual'])**2)
+                        else: b_score = np.mean(((1/tmp[col]) - tmp['HW_Actual'])**2)
+                        b_results.append({'Bookie': name, 'Brier': b_score})
+                st.table(pd.DataFrame(b_results).sort_values('Brier'))
 
 except Exception as e:
     st.error(f"System Error: {e}")
