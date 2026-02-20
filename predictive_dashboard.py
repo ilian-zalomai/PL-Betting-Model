@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
 import os
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix
 from predictive_model import load_and_clean_data, calculate_rolling_stats, train_and_evaluate, get_latest_stats
 
 warnings.filterwarnings('ignore')
@@ -112,7 +112,7 @@ try:
     st.sidebar.title("PL Analytics Pro")
     
     app_mode = st.sidebar.radio("ENGINE MODE", 
-                                ["Predictive Intelligence (P2)", "Historical Efficiency (P1)"],
+                                ["Historical Efficiency (P1)", "Predictive Intelligence (P2)"],
                                 index=0)
     
     st.sidebar.markdown("---")
@@ -137,7 +137,6 @@ try:
             ax1.plot(b_scores['Season'], b_scores['BrierScore'], marker='s', color='#3b82f6', linewidth=2)
             ax1.tick_params(colors='#94a3b8', labelsize=8)
             plt.xticks(rotation=45)
-            plt.grid(color='#334155', linestyle='--', alpha=0.5)
             st.pyplot(fig1)
         
         with t2:
@@ -157,12 +156,14 @@ try:
         else:
             mc1, mc2, mc3, mc4 = st.columns(4)
             y_test = test_data['Target']
-            mc1.metric("Model Precision", f"{accuracy_score(y_test, model.predict(test_data[features])):.1%}")
+            y_pred = model.predict(test_data[features])
+            
+            mc1.metric("Model Precision", f"{accuracy_score(y_test, y_pred):.1%}")
             mc2.metric("Active Features", "10")
             mc3.metric("Test Period", df_ml['Season'].unique()[-1])
             mc4.metric("Algorithm", "Random Forest")
 
-            mt1, mt2 = st.tabs(["Value Discovery", "Match Predictor"])
+            mt1, mt2, mt3 = st.tabs(["Value Discovery", "Match Predictor", "Model Diagnostics"])
             with mt1:
                 st.markdown("### Real-Time Value Discovery")
                 ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
@@ -203,6 +204,14 @@ try:
                     ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
                     ax_m.tick_params(colors='#94a3b8')
                     st.pyplot(fig_m)
+
+            with mt3:
+                st.markdown("### Model Quality Diagnostics")
+                cm = confusion_matrix(y_test, y_pred)
+                fig_cm, ax_cm = plt.subplots(figsize=(5, 4), facecolor='#0e1117')
+                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=le.classes_, yticklabels=le.classes_, ax=ax_cm)
+                ax_cm.set_title("Confusion Matrix", color='white')
+                st.pyplot(fig_cm)
 
 except Exception as e:
     st.error(f"System Error: {e}")
