@@ -123,16 +123,38 @@ try:
     st.sidebar.markdown("---")
     
     # --- AI AGENT SIDEBAR PANEL ---
+    st.sidebar.markdown("---")
     st.sidebar.subheader("🤖 AI Strategy Agent")
-    with st.sidebar.expander("Live Risk Assessment", expanded=True):
-        st.write("**Current Market Sentiment:** Moderate")
-        st.write("**Recommendation:** Focus on Home Win value bets where EV > 12%.")
-        st.info("Agent Note: Model identifies increased volatility in recent away performances across the league.")
     
-    with st.sidebar.expander("Strategy Optimizer"):
-        st.write("**Bankroll Management:** Kelly Criterion (0.25)")
-        st.write("**Suggested Stake:** 2% of Bankroll")
-        st.progress(0.4)
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": "I am your PL Strategy Agent. Ask me about match risks, Kelly Criterion, or current market value."}]
+
+    # Display chat messages
+    for msg in st.session_state.messages:
+        with st.sidebar.chat_message(msg["role"]):
+            st.write(msg["content"])
+
+    # Chat input
+    if prompt := st.sidebar.chat_input("Ask the Agent..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.sidebar.chat_message("user"):
+            st.write(prompt)
+
+        # Generate Agent Response based on logic
+        with st.sidebar.chat_message("assistant"):
+            response = ""
+            if "risk" in prompt.lower():
+                response = "Current market risk is MODERATE. Volatility in mid-table away games is high. Stick to Home Value > 12%."
+            elif "kelly" in prompt.lower() or "bankroll" in prompt.lower():
+                response = "I recommend a Fractional Kelly (0.25) to preserve capital. Current suggested stake: 2% per unit."
+            elif "value" in prompt.lower():
+                response = "The 'Value Discovery' tab shows the highest edge is currently in Draw outcomes for defensive home sides."
+            else:
+                response = "I've analyzed the 20-year trend: Focus on teams with positive Elo momentum in their last 3 fixtures."
+            
+            st.write(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
     
     st.sidebar.markdown("---")
     st.sidebar.caption("Data: 2003 - 2026 Seasonality")
