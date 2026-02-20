@@ -76,7 +76,7 @@ def train_and_evaluate(df):
     
     # Train Models
     rf = RandomForestClassifier(n_estimators=100, min_samples_split=12, max_depth=10, random_state=42).fit(X_train, y_train)
-    lr = LogisticRegression(max_iter=1000, multi_class='ovr').fit(X_train, y_train)
+    lr = LogisticRegression(max_iter=1000).fit(X_train, y_train)
     xgb = XGBClassifier(n_estimators=100, learning_rate=0.05, max_depth=5, random_state=42).fit(X_train, y_train)
     ensemble = CumulativeEnsemble([rf, lr, xgb])
     
