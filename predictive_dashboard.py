@@ -84,7 +84,6 @@ def calculate_brier_scores(df_data):
     return df_data.groupby('Season')['SquaredError'].mean().reset_index().rename(columns={'SquaredError': 'BrierScore'}).sort_values('Season')
 
 # --- Sidebar ---
-st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
 st.sidebar.title("PL Analytics Pro")
 app_mode = st.sidebar.radio("ENGINE MODE", ["Historical Efficiency (P1)", "Predictive Intelligence (P2)"], index=1)
 
@@ -93,12 +92,12 @@ selected_algo = "Random Forest"
 algo_container = None
 if app_mode == "Predictive Intelligence (P2)":
     st.sidebar.markdown("---")
-    st.sidebar.subheader("⚙️ Algorithm Config")
+    st.sidebar.subheader("Algorithm Config")
     selected_algo = st.sidebar.selectbox("Active Model", ["Random Forest", "Logistic Regression", "XGBoost", "Cumulative Ensemble"])
-    st.sidebar.subheader("📊 Algorithm Breakdown")
+    st.sidebar.subheader("Algorithm Breakdown")
     algo_container = st.sidebar.container()
     
-    st.sidebar.subheader("🧠 Model Features")
+    st.sidebar.subheader("Model Features")
     with st.sidebar.expander("View 13 Active Features"):
         st.write("**Offensive Stats (Rolling 5):**")
         st.write("- Goals For, Shots, Shots on Target, Corners")
@@ -110,7 +109,7 @@ if app_mode == "Predictive Intelligence (P2)":
 
 # OpenAI Research Agent (Silent Loading)
 st.sidebar.markdown("---")
-st.sidebar.subheader("🤖 AI Research Agent")
+st.sidebar.subheader("AI Research Agent")
 openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 
 if "messages" not in st.session_state:
@@ -130,7 +129,6 @@ try:
     with st.spinner("Initializing Predictive Engine..."):
         df_raw, df_elo, df_stats, models, le, features, test_data, latest, df_hist = load_all_dashboard_data()
     
-    # Render Algorithm Accuracy in Sidebar (Now in correctly positioned container)
     if app_mode == "Predictive Intelligence (P2)" and algo_container:
         with algo_container:
             y_true = test_data['Target']
@@ -141,28 +139,31 @@ try:
     active_model = models[selected_algo]
 
     if app_mode == "Historical Efficiency (P1)":
-        st.title("📊 Market Efficiency Analysis")
+        st.title("Market Efficiency Analysis")
+        st.markdown("#### Project 1: Analyzing Bookmaker Performance & Brier Scores")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Matches", f"{len(df_hist):,}"); m2.metric("Seasons", len(df_hist['Season'].unique())); m3.metric("Home Win %", f"{(df_hist['FTR'] == 'H').mean():.1%}"); m4.metric("Market Accuracy", "74.2%")
         t1, t2 = st.tabs(["Market Accuracy Trend", "Historical Team Database"])
         with t1:
+            st.markdown("### Brier Score Decay Curve")
             b_scores = calculate_brier_scores(df_hist)
             fig1, ax1 = plt.subplots(figsize=(10, 4), facecolor='#0e1117'); ax1.set_facecolor('#0e1117'); ax1.plot(b_scores['Season'], b_scores['BrierScore'], marker='s', color='#3b82f6', linewidth=2); ax1.tick_params(colors='#94a3b8', labelsize=8); plt.xticks(rotation=45); st.pyplot(fig1)
         with t2:
+            st.markdown("### Team Historical Performance")
             c1, c2 = st.columns(2); sel_s = c1.selectbox("Season", df_hist['Season'].unique()[::-1]); sel_t = c2.selectbox("Team", sorted(df_hist[df_hist['Season'] == sel_s]['HomeTeam'].unique()))
             t_df = df_hist[((df_hist['HomeTeam'] == sel_t) | (df_hist['AwayTeam'] == sel_t)) & (df_hist['Season'] == sel_s)]
             st.dataframe(t_df[['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR']].sort_values('Date', ascending=False), width='stretch')
 
     else: # P2
-        st.title(f"🤖 Intelligence Engine: {selected_algo}")
+        st.title(f"Intelligence Engine: {selected_algo}")
+        st.markdown("#### Project 2: Forward-Looking Machine Learning & Value Discovery")
         mc1, mc2, mc3, mc4 = st.columns(4)
         y_test = test_data['Target']; y_pred = active_model.predict(test_data[features])
         mc1.metric("Model Precision", f"{accuracy_score(y_test, y_pred):.1%}"); mc2.metric("Active Features", len(features)); mc3.metric("Test Period", df_raw['Season'].unique()[-1]); mc4.metric("Algorithm", selected_algo)
         
-        # INCREASED TAB DEPTH FOR 500+ LINES GOAL
-        mt1, mt2, mt3, mt4, mt5, mt6 = st.tabs([
+        mt1, mt2, mt3, mt4, mt5, mt6, mt7 = st.tabs([
             "Value Discovery", "Match Predictor", "Deep Diagnostics", 
-            "📉 Strategy Backtest", "⚽ Poisson Matrix", "⚖️ Risk Analytics"
+            "Strategy Backtest", "Poisson Matrix", "Risk Analytics", "Research & Documentation"
         ])
         
         with mt1:
@@ -202,9 +203,9 @@ try:
                 with res_col2:
                     st.subheader("Strategic Verdict")
                     evs = [(p_h*ho)-1, (p_d*do)-1, (p_a*ao)-1]; best_idx = np.argmax(evs)
-                    if evs[best_idx] > 0.05: st.success(f"🎯 **RECOMMENDATION:** {['Home Win', 'Draw', 'Away Win'][best_idx]} ({evs[best_idx]:.1%})")
+                    if evs[best_idx] > 0.05: st.success(f"🎯 RECOMMENDATION: {['Home Win', 'Draw', 'Away Win'][best_idx]} ({evs[best_idx]:.1%})")
                     else: st.warning("⚠️ NO CLEAR VALUE")
-                    st.info(f"**Elo Context:** {ht} ({int(hs['Elo'])}) vs {at} ({int(as_['Elo'])})")
+                    st.info(f"Elo Context: {ht} ({int(hs['Elo'])}) vs {at} ({int(as_['Elo'])})")
 
         with mt3:
             st.markdown("### Model Reliability & Market Benchmark")
@@ -227,111 +228,56 @@ try:
                         b_results.append({'Bookie': name, 'Brier': b_score})
                 st.table(pd.DataFrame(b_results).sort_values('Brier'))
 
-        # --- NEW TAB 4: BACKTESTING ---
         with mt4:
-            st.header("📉 Historical Strategy Backtest")
+            st.header("Historical Strategy Backtest")
             st.markdown("Simulate model performance across past seasons to find the optimal betting configuration.")
-            
-            backtest_df = run_backtest_loop(df_stats, features, le)
-            
-            # ROI Simulation Logic
-            st.subheader("Interactive ROI Simulator")
             sc1, sc2, sc3 = st.columns(3)
-            min_odds = sc1.slider("Min Odds Range", 1.1, 5.0, 1.5)
-            max_odds = sc2.slider("Max Odds Range", 1.5, 15.0, 3.5)
-            min_ev = sc3.slider("Required Edge (EV) %", 0, 50, 10) / 100
-            
-            # Run simulation on test data
-            td = test_data.copy()
-            td['Best_EV'] = td[['EV_H', 'EV_D', 'EV_A']].max(axis=1) if 'EV_H' in td else 0
-            # (Recalculate if needed)
-            probs = active_model.predict_proba(td[features])
-            for outcome in ['H', 'D', 'A']:
-                td[f'Prob_{outcome}'] = probs[:, c_map[outcome]]
-                td[f'EV_{outcome}'] = (td[f'Prob_{outcome}'] * td[f'B365{outcome}']) - 1
-            
-            # Filter matches based on user toggles
+            min_odds = sc1.slider("Min Odds Range", 1.1, 5.0, 1.5); max_odds = sc2.slider("Max Odds Range", 1.5, 15.0, 3.5); min_ev = sc3.slider("Required Edge (EV) %", 0, 50, 10) / 100
+            td = test_data.copy(); probs = active_model.predict_proba(td[features])
+            for o in ['H', 'D', 'A']: td[f'Prob_{o}'] = probs[:, c_map[o]]; td[f'EV_{o}'] = (td[f'Prob_{o}'] * td[f'B365{o}']) - 1
             bets = []
             for idx, r in td.iterrows():
                 for o in ['H', 'D', 'A']:
                     if r[f'EV_{o}'] > min_ev and min_odds <= r[f'B365{o}'] <= max_odds:
-                        won = r['FTR'] == o
-                        profit = (r[f'B365{o}'] - 1) if won else -1
-                        bets.append({'Date': r['Date'], 'Profit': profit, 'Won': won})
-            
+                        won = r['FTR'] == o; profit = (r[f'B365{o}'] - 1) if won else -1; bets.append({'Date': r['Date'], 'Profit': profit, 'Won': won})
             if bets:
-                bets_df = pd.DataFrame(bets).sort_values('Date')
-                bets_df['Cum_Profit'] = bets_df['Profit'].cumsum()
-                
-                bc1, bc2 = st.columns(2)
-                bc1.metric("Simulated Net Profit", f"{bets_df['Profit'].sum():.2f} units")
-                bc1.metric("Bet Volume", len(bets_df))
-                bc2.metric("Strategy ROI", f"{(bets_df['Profit'].sum() / len(bets_df)):.1%}")
-                bc2.metric("Win Rate", f"{bets_df['Won'].mean():.1%}")
-                
-                fig_p, ax_p = plt.subplots(figsize=(10, 4), facecolor='#0e1117')
-                ax_p.set_facecolor('#0e1117')
-                ax_p.plot(bets_df['Date'], bets_df['Cum_Profit'], color='#00d4ff', linewidth=2)
-                ax_p.fill_between(bets_df['Date'], bets_df['Cum_Profit'], color='#00d4ff', alpha=0.1)
-                ax_p.set_title("Wealth Curve: Cumulative Profit Over Time", color='white')
-                ax_p.tick_params(colors='#94a3b8')
-                st.pyplot(fig_p)
-            else:
-                st.warning("No matches found in this odds/EV range. Try loosening filters.")
+                bets_df = pd.DataFrame(bets).sort_values('Date'); bets_df['Cum_Profit'] = bets_df['Profit'].cumsum()
+                bc1, bc2 = st.columns(2); bc1.metric("Simulated Net Profit", f"{bets_df['Profit'].sum():.2f} units"); bc1.metric("Bet Volume", len(bets_df)); bc2.metric("Strategy ROI", f"{(bets_df['Profit'].sum() / len(bets_df)):.1%}"); bc2.metric("Win Rate", f"{bets_df['Won'].mean():.1%}")
+                fig_p, ax_p = plt.subplots(figsize=(10, 4), facecolor='#0e1117'); ax_p.set_facecolor('#0e1117'); ax_p.plot(bets_df['Date'], bets_df['Cum_Profit'], color='#00d4ff', linewidth=2); ax_p.fill_between(bets_df['Date'], bets_df['Cum_Profit'], color='#00d4ff', alpha=0.1); st.pyplot(fig_p)
+            else: st.warning("No matches found.")
 
-        # --- NEW TAB 5: POISSON ---
         with mt5:
-            st.header("⚽ Poisson Scoreline Matrix")
-            st.write("Predicting exact scores using offensive and defensive performance metrics.")
-            
-            pc1, pc2 = st.columns(2)
-            h_team_p = pc1.selectbox("Home Side (Poisson)", teams, index=teams.index('Liverpool'))
-            a_team_p = pc2.selectbox("Away Side (Poisson)", teams, index=teams.index('Arsenal'))
-            
-            h_s_p = latest[latest['Team'] == h_team_p].iloc[0]
-            a_s_p = latest[latest['Team'] == a_team_p].iloc[0]
-            
-            # Use rolling goals as lambda for Poisson
-            h_lambda = h_s_p['Rolling_GoalsFor']
-            a_lambda = a_s_p['Rolling_GoalsFor']
-            
+            st.header("Poisson Scoreline Matrix")
+            pc1, pc2 = st.columns(2); h_team_p = pc1.selectbox("Home Side (Poisson)", teams, index=teams.index('Liverpool')); a_team_p = pc2.selectbox("Away Side (Poisson)", teams, index=teams.index('Arsenal'))
+            h_lambda, a_lambda = latest[latest['Team'] == h_team_p].iloc[0]['Rolling_GoalsFor'], latest[latest['Team'] == a_team_p].iloc[0]['Rolling_GoalsFor']
             matrix, p_h_win, p_draw, p_a_win = get_poisson_probabilities(h_lambda, a_lambda)
-            
-            fig_hm, ax_hm = plt.subplots(figsize=(6, 5), facecolor='#0e1117')
-            sns.heatmap(matrix, annot=True, fmt='.1%', cmap='Blues', ax=ax_hm, cbar=False)
-            ax_hm.set_xlabel(f"{a_team_p} Goals", color='white')
-            ax_hm.set_ylabel(f"{h_team_p} Goals", color='white')
-            ax_hm.set_title("Scoreline Probability Matrix", color='white')
-            st.pyplot(fig_hm)
-            
-            st.write(f"**Poisson Calculation:** Home: {p_h_win:.1%}, Draw: {p_draw:.1%}, Away: {p_a_win:.1%}")
+            fig_hm, ax_hm = plt.subplots(figsize=(6, 5), facecolor='#0e1117'); sns.heatmap(matrix, annot=True, fmt='.1%', cmap='Blues', ax=ax_hm, cbar=False); ax_hm.set_xlabel(f"{a_team_p} Goals", color='white'); ax_hm.set_ylabel(f"{h_team_p} Goals", color='white'); st.pyplot(fig_hm)
+            st.write(f"Poisson Calculation: Home: {p_h_win:.1%}, Draw: {p_draw:.1%}, Away: {p_a_win:.1%}")
 
-        # --- NEW TAB 6: RISK ---
         with mt6:
-            st.header("⚖️ Performance Volatility & Variance")
-            st.write("Analyzing team stability and outcome consistency.")
-            
-            # Volatility = Standard Deviation of Goals
+            st.header("Performance Volatility & Variance")
             vol_data = []
             for team in teams:
                 t_matches = df_raw[(df_raw['HomeTeam'] == team) | (df_raw['AwayTeam'] == team)].tail(20)
-                goals = t_matches.apply(lambda r: r['FTHG'] if r['HomeTeam'] == team else r['FTAG'], axis=1)
-                vol_data.append({'Team': team, 'Volatility': goals.std(), 'Avg Goals': goals.mean()})
-            
+                goals = t_matches.apply(lambda r: r['FTHG'] if r['HomeTeam'] == team else r['FTAG'], axis=1); vol_data.append({'Team': team, 'Volatility': goals.std(), 'Avg Goals': goals.mean()})
             vol_df = pd.DataFrame(vol_data).sort_values('Volatility', ascending=False)
-            
-            vc1, vc2 = st.columns(2)
-            with vc1:
-                st.subheader("High Volatility Teams")
-                st.write("Teams with inconsistent scoring (higher risk).")
-                st.dataframe(vol_df.head(10))
-            with vc2:
-                st.subheader("League Stability Map")
-                fig_vol, ax_vol = plt.subplots(figsize=(6, 6), facecolor='#0e1117')
-                ax_vol.set_facecolor('#0e1117')
-                sns.regplot(data=vol_df, x='Avg Goals', y='Volatility', ax=ax_vol, color='#3b82f6')
-                ax_vol.set_title("Scoring Volume vs. Consistency", color='white')
-                st.pyplot(fig_vol)
+            vc1, vc2 = st.columns(2); vc1.subheader("High Volatility Teams"); vc1.dataframe(vol_df.head(10)); vc2.subheader("League Stability Map")
+            fig_vol, ax_vol = plt.subplots(figsize=(6, 6), facecolor='#0e1117'); ax_vol.set_facecolor('#0e1117'); sns.regplot(data=vol_df, x='Avg Goals', y='Volatility', ax=ax_vol, color='#3b82f6'); st.pyplot(fig_vol)
+
+        with mt7:
+            st.header("Project Evidence & Documentation")
+            doc_tabs = st.tabs(["Market Efficiency (Vig Analysis)", "Technical Methodology", "AI Development Trace"])
+            with doc_tabs[0]:
+                st.subheader("Bookmaker Overround (Vig) Trend")
+                df_raw['Margin'] = (1/df_raw['B365H'] + 1/df_raw['B365D'] + 1/df_raw['B365A']) - 1
+                margin_trend = df_raw.groupby('Season')['Margin'].mean().reset_index()
+                fig_m, ax_m = plt.subplots(figsize=(10, 4), facecolor='#0e1117'); ax_m.set_facecolor('#0e1117'); ax_m.plot(margin_trend['Season'], margin_trend['Margin'], marker='o', color='#00d4ff'); ax_m.set_ylabel("Margin %", color='#94a3b8'); plt.xticks(rotation=45); st.pyplot(fig_m)
+            with doc_tabs[1]:
+                st.subheader("Technical Methodology")
+                st.markdown("""### 1. Forward-Looking Feature Engineering\n- **Elo Rating System:** Updated after every match since 2003.\n- **Rolling Performance Stats:** 5-game rolling windows of Goals, Shots, Shots on Target, and Corners.\n- **Total Features:** 13 predictive metrics per match.""")
+            with doc_tabs[2]:
+                st.subheader("AI Development Log (Traceability)")
+                st.markdown("""This project was developed in partnership with **Gemini CLI** (an agentic coding partner).""")
 
 except Exception as e:
     st.error(f"System Error: {e}")
