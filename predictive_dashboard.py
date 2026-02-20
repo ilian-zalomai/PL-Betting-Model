@@ -35,7 +35,6 @@ st.markdown("""
 
 # --- AI Agent Tools ---
 def web_search(query):
-    """Performs a web search using DuckDuckGo."""
     try:
         with DDGS() as ddgs:
             results = [r for r in ddgs.text(query, max_results=3)]
@@ -44,33 +43,19 @@ def web_search(query):
         return f"Search error: {str(e)}"
 
 def run_openai_agent(prompt, api_key):
-    """Runs an OpenAI agent that can search the web."""
     try:
         client = OpenAI(api_key=api_key)
-        
-        # Step 1: Check if search is needed
-        system_msg = "You are a PL Betting Research Agent. If the user asks for news, injuries, or recent events, use web search. Otherwise, answer based on your knowledge."
-        
-        # Simplified "Agent" logic for Streamlit performance:
-        # We'll automatically search if keywords like 'news', 'injury', 'latest' are present
+        system_msg = "You are a PL Betting Research Agent. Use web search for injuries/news."
         search_results = ""
-        if any(word in prompt.lower() for word in ['news', 'injury', 'latest', 'lineup', 'missing']):
-            with st.spinner("Searching the web..."):
-                results = web_search(f"Premier League {prompt}")
-                search_results = f"\n\nWEB SEARCH RESULTS:\n{json.dumps(results, indent=2)}"
+        if any(word in prompt.lower() for word in ['news', 'injury', 'latest', 'lineup']):
+            results = web_search(f"Premier League {prompt}")
+            search_results = f"\n\nWEB SEARCH RESULTS:\n{json.dumps(results)}"
 
-        messages = [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": f"{prompt}{search_results}"}
-        ]
-        
-        response = client.chat.completions.create(
-            model="gpt-4o-mini", # Efficient and smart
-            messages=messages
-        )
+        messages = [{"role": "system", "content": system_msg}, {"role": "user", "content": f"{prompt}{search_results}"}]
+        response = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
         return response.choices[0].message.content
     except Exception as e:
-        return f"OpenAI Error: {str(e)}"
+        return f"Error: {str(e)}"
 
 # --- Data Loading ---
 @st.cache_data
@@ -90,20 +75,18 @@ def calculate_brier_scores(df_data):
     df_data['SquaredError'] = (df_data['B365H_Prob'] - df_data['HomeWin_Outcome'])**2
     return df_data.groupby('Season')['SquaredError'].mean().reset_index().rename(columns={'SquaredError': 'BrierScore'}).sort_values('Season')
 
-# --- Sidebar Architecture ---
+# --- Sidebar ---
 st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
 st.sidebar.title("PL Analytics Pro")
-
 app_mode = st.sidebar.radio("ENGINE MODE", ["Historical Efficiency (P1)", "Predictive Intelligence (P2)"], index=1)
 
-# OpenAI Config
 st.sidebar.markdown("---")
 st.sidebar.subheader("🤖 OpenAI Research Agent")
 stored_openai_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 openai_api_key = st.sidebar.text_input("OpenAI API Key", value=stored_openai_key if stored_openai_key else "", type="password")
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "I am your OpenAI Research Agent. I can search the web for injuries or team news. Ask me anything!"}]
+    st.session_state.messages = [{"role": "assistant", "content": "I am your Research Agent. Ask me for latest team news!"}]
 
 for msg in st.session_state.messages:
     with st.sidebar.chat_message(msg["role"]): st.write(msg["content"])
@@ -115,13 +98,13 @@ if prompt := st.sidebar.chat_input("Ask the Agent..."):
         if openai_api_key:
             response = run_openai_agent(prompt, openai_api_key)
         else:
-            response = "Please provide an OpenAI API Key to enable the Research Agent."
+            response = "Please provide an OpenAI API Key."
         st.write(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
 
-# --- Main App Execution ---
+# --- Main App ---
 try:
-    with st.spinner("Loading Predictive Engine..."):
+    with st.spinner("Loading Engine..."):
         df_raw, df_elo, df_stats, model, le, features, test_data, latest, df_hist = load_all_dashboard_data()
 
     if app_mode == "Historical Efficiency (P1)":
@@ -131,7 +114,6 @@ try:
         m2.metric("Seasons", len(df_hist['Season'].unique()))
         m3.metric("Home Win %", f"{(df_hist['FTR'] == 'H').mean():.1%}")
         m4.metric("Market Accuracy", "74.2%")
-
         t1, t2 = st.tabs(["Market Accuracy Trend", "Historical Team Database"])
         with t1:
             b_scores = calculate_brier_scores(df_hist)
@@ -148,7 +130,7 @@ try:
             t_df = df_hist[((df_hist['HomeTeam'] == sel_t) | (df_hist['AwayTeam'] == sel_t)) & (df_hist['Season'] == sel_s)]
             st.dataframe(t_df[['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR']].sort_values('Date', ascending=False), width='stretch')
 
-    else: # Predictive Intelligence (P2)
+    else: # P2
         st.title("🤖 Predictive Intelligence Engine")
         mc1, mc2, mc3, mc4 = st.columns(4)
         y_test = test_data['Target']
@@ -157,7 +139,6 @@ try:
         mc2.metric("Active Features", len(features))
         mc3.metric("Test Period", df_raw['Season'].unique()[-1])
         mc4.metric("Algorithm", "Random Forest")
-
         mt1, mt2, mt3 = st.tabs(["Value Discovery", "Match Predictor", "Deep Diagnostics"])
         with mt1:
             ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
@@ -173,7 +154,6 @@ try:
                         v_list.append({'Date': r['Date'].strftime('%Y-%m-%d'), 'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}", 'Pick': outcome, 'Odds': r[f'B365{outcome}'], 'Edge': f"{ev:.1%}"})
             if v_list: st.table(pd.DataFrame(v_list).head(15))
             else: st.warning("No signals found.")
-            
         with mt2:
             teams = sorted(latest['Team'].unique())
             tc1, tc2 = st.columns(2)
@@ -187,36 +167,15 @@ try:
                 fig_m, ax_m = plt.subplots(figsize=(7, 3.5), facecolor='#0e1117')
                 ax_m.set_facecolor('#0e1117')
                 ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
-                ax_m.tick_params(colors='#94a3b8')
                 st.pyplot(fig_m)
-
         with mt3:
-            st.markdown("### Model Reliability & Market Benchmark")
-            diag_c1, diag_c2 = st.columns(2)
-            with diag_c1:
-                st.subheader("Reliability (Calibration)")
-                prob_true, prob_pred = get_calibration_data(model, test_data[features], y_test, le)
-                fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117')
-                ax_cal.set_facecolor('#0e1117')
-                ax_cal.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
-                ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6', label="Random Forest")
-                ax_cal.set_ylabel("Actual Frequency", color='white')
-                ax_cal.set_xlabel("Predicted Probability", color='white')
-                ax_cal.tick_params(colors='white')
-                st.pyplot(fig_cal)
-            with diag_c2:
-                st.subheader("Market Comparison (Brier)")
-                bookies = {'B365': 'B365H', 'Bwin': 'BWH', 'VCBet': 'VCH', 'Model': 'Prob_H'}
-                test_data['Prob_H'] = model.predict_proba(test_data[features])[:, c_map['H']]
-                test_data['HW_Actual'] = (test_data['FTR'] == 'H').astype(int)
-                b_results = []
-                for name, col in bookies.items():
-                    if col in test_data.columns:
-                        tmp = test_data.dropna(subset=[col])
-                        if name == 'Model': b_score = np.mean((tmp[col] - tmp['HW_Actual'])**2)
-                        else: b_score = np.mean(((1/tmp[col]) - tmp['HW_Actual'])**2)
-                        b_results.append({'Bookie': name, 'Brier': b_score})
-                st.table(pd.DataFrame(b_results).sort_values('Brier'))
+            st.subheader("Reliability (Calibration)")
+            prob_true, prob_pred = get_calibration_data(model, test_data[features], y_test, le)
+            fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117')
+            ax_cal.set_facecolor('#0e1117')
+            ax_cal.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
+            ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6', label="Random Forest")
+            st.pyplot(fig_cal)
 
 except Exception as e:
     st.error(f"System Error: {e}")
