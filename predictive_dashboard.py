@@ -106,14 +106,14 @@ if app_mode == "Predictive Intelligence (P2)":
     algo_container = st.sidebar.container()
     
     st.sidebar.subheader("🧠 Model Features")
-    with st.sidebar.expander("View 12 Active Features"):
+    with st.sidebar.expander("View 13 Active Features"):
         st.write("**Offensive Stats (Rolling 5):**")
         st.write("- Goals For, Shots, Shots on Target, Corners")
         st.write("**Defensive Stats (Rolling 5):**")
         st.write("- Goals Against")
         st.write("**Strength Ratings:**")
         st.write("- Home Elo, Away Elo, Elo Difference")
-        st.caption("Applied to both Home & Away teams.")
+        st.caption("Rolling stats applied to both Home & Away teams (10) + 3 Elo metrics = 13 total.")
 
 # OpenAI Research Agent (Silent Loading)
 st.sidebar.markdown("---")
