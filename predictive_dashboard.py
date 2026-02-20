@@ -96,8 +96,8 @@ app_mode = st.sidebar.radio("ENGINE MODE", ["Historical Efficiency (P1)", "Predi
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🤖 OpenAI Research Agent")
-stored_openai_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
-openai_api_key = st.sidebar.text_input("OpenAI API Key", value=stored_openai_key if stored_openai_key else "", type="password")
+# Load key automatically from .env (local) or Secrets (cloud)
+openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "I am your Research Agent. Ask me for latest team news!"}]
@@ -112,7 +112,7 @@ if prompt := st.sidebar.chat_input("Ask the Agent..."):
         if openai_api_key:
             response = run_openai_agent(prompt, openai_api_key)
         else:
-            response = "Please provide an OpenAI API Key."
+            response = "Agent Offline: API Key missing in System Secrets."
         st.write(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
 
