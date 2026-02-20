@@ -1,4 +1,18 @@
 import streamlit as st
+import sys
+
+# --- Pre-flight Dependency Check ---
+missing_deps = []
+try: import openai
+except ImportError: missing_deps.append("openai")
+try: import duckduckgo_search
+except ImportError: missing_deps.append("duckduckgo-search")
+
+if missing_deps:
+    st.error(f"Missing Dependencies: {', '.join(missing_deps)}")
+    st.info("The server is still installing packages. Please wait 60 seconds and refresh.")
+    st.stop()
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -167,6 +181,7 @@ try:
                 fig_m, ax_m = plt.subplots(figsize=(7, 3.5), facecolor='#0e1117')
                 ax_m.set_facecolor('#0e1117')
                 ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
+                ax_m.tick_params(colors='#94a3b8')
                 st.pyplot(fig_m)
         with mt3:
             st.subheader("Reliability (Calibration)")
