@@ -5,14 +5,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
 import os
-from dotenv import load_dotenv
-from google import genai
 from sklearn.metrics import accuracy_score
 from predictive_model import load_and_clean_data, calculate_rolling_stats, train_and_evaluate, get_latest_stats
-
-# --- Load Environment Variables ---
-env_path = os.path.join(os.getcwd(), '.env')
-load_dotenv(dotenv_path=env_path)
 
 warnings.filterwarnings('ignore')
 
@@ -82,16 +76,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- LLM Helper Functions ---
-def get_llm_response(prompt, api_key):
-    try:
-        client = genai.Client(api_key=api_key)
-        system_context = "You are a Premier League Sports Betting AI Agent. Provide concise, expert strategic advice."
-        response = client.models.generate_content(model="gemini-1.5-flash", contents=f"{system_context}\n\nUser: {prompt}")
-        return response.text
-    except Exception as e:
-        return f"Error: {str(e)}"
-
 # --- Data Loading (Shared and Cached) ---
 @st.cache_data
 def load_all_dashboard_data():
@@ -131,31 +115,13 @@ try:
                                 ["Predictive Intelligence (P2)", "Historical Efficiency (P1)"],
                                 index=0)
     
-    # LLM Config
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🤖 AI Strategy Agent")
-    stored_key = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
-    gemini_api_key = st.sidebar.text_input("Gemini API Key", value=stored_key if stored_key else "", type="password")
-    
-    if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": "I am your live AI Agent. How can I help?"}]
-
-    for msg in st.session_state.messages:
-        with st.sidebar.chat_message(msg["role"]): st.write(msg["content"])
-
-    if prompt := st.sidebar.chat_input("Ask the Agent..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.sidebar.chat_message("user"): st.write(prompt)
-        with st.sidebar.chat_message("assistant"):
-            if gemini_api_key:
-                response = get_llm_response(prompt, gemini_api_key)
-            else:
-                response = "Please provide an API key to enable AI reasoning."
-            st.write(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
+    st.sidebar.caption("Data: 2003 - 2026 Seasonality")
 
     if app_mode == "Historical Efficiency (P1)":
         st.title("📊 Market Efficiency Analysis")
+        st.markdown("#### Project 1: Analyzing Bookmaker Performance & Brier Scores")
+        
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Matches", f"{len(df_hist):,}")
         m2.metric("Seasons", len(df_hist['Season'].unique()))
@@ -164,14 +130,18 @@ try:
 
         t1, t2 = st.tabs(["Market Accuracy Trend", "Historical Team Database"])
         with t1:
+            st.markdown("### Brier Score Decay Curve")
             b_scores = calculate_brier_scores(df_hist)
             fig1, ax1 = plt.subplots(figsize=(10, 4), facecolor='#0e1117')
             ax1.set_facecolor('#0e1117')
             ax1.plot(b_scores['Season'], b_scores['BrierScore'], marker='s', color='#3b82f6', linewidth=2)
             ax1.tick_params(colors='#94a3b8', labelsize=8)
             plt.xticks(rotation=45)
+            plt.grid(color='#334155', linestyle='--', alpha=0.5)
             st.pyplot(fig1)
+        
         with t2:
+            st.markdown("### Team Historical Performance")
             c1, c2 = st.columns(2)
             sel_s = c1.selectbox("Season", df_hist['Season'].unique()[::-1])
             sel_t = c2.selectbox("Team", sorted(df_hist[df_hist['Season'] == sel_s]['HomeTeam'].unique()))
@@ -180,43 +150,59 @@ try:
 
     else: # Predictive Intelligence (P2)
         st.title("🤖 Predictive Intelligence Engine")
-        mc1, mc2, mc3, mc4 = st.columns(4)
-        y_test = test_data['Target']
-        mc1.metric("Model Precision", f"{accuracy_score(y_test, model.predict(test_data[features])):.1%}")
-        mc2.metric("Active Features", "10")
-        mc3.metric("Test Period", df_ml['Season'].unique()[-1])
-        mc4.metric("Algorithm", "Random Forest")
+        st.markdown("#### Project 2: Forward-Looking Machine Learning & Value Discovery")
+        
+        if model is None:
+            st.error("Engine failure: Predictive model failed to initialize.")
+        else:
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            y_test = test_data['Target']
+            mc1.metric("Model Precision", f"{accuracy_score(y_test, model.predict(test_data[features])):.1%}")
+            mc2.metric("Active Features", "10")
+            mc3.metric("Test Period", df_ml['Season'].unique()[-1])
+            mc4.metric("Algorithm", "Random Forest")
 
-        mt1, mt2 = st.tabs(["Value Discovery", "Match Predictor"])
-        with mt1:
-            ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
-            probs = model.predict_proba(test_data[features])
-            c_map = {cls: i for i, cls in enumerate(le.classes_)}
-            v_list = []
-            for outcome in ['H', 'D', 'A']:
-                p_col = probs[:, c_map[outcome]]
-                ev_col = (p_col * test_data[f'B365{outcome}']) - 1
-                for i, ev in enumerate(ev_col):
-                    if ev > ev_t:
-                        r = test_data.iloc[i]
-                        v_list.append({'Date': r['Date'].strftime('%Y-%m-%d'), 'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}", 'Pick': outcome, 'Odds': r[f'B365{outcome}'], 'Edge': f"{ev:.1%}"})
-            if v_list: st.table(pd.DataFrame(v_list).head(15))
-            else: st.warning("No signals found.")
-        with mt2:
-            teams = sorted(latest['Team'].unique())
-            tc1, tc2 = st.columns(2)
-            ht, at = tc1.selectbox("HOME", teams, index=teams.index('Man United')), tc2.selectbox("AWAY", teams, index=teams.index('Arsenal'))
-            o1, o2, o3 = st.columns(3)
-            ho, do, ao = o1.number_input("Home", value=2.0), o2.number_input("Draw", value=3.4), o3.number_input("Away", value=3.5)
-            if st.button("EXECUTE FORECAST"):
-                hs, as_ = latest[latest['Team'] == ht].iloc[0], latest[latest['Team'] == at].iloc[0]
-                inp = pd.DataFrame([{'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'], 'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'], 'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'], 'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners']}])
-                rp = model.predict_proba(inp[features])[0]
-                fig_m, ax_m = plt.subplots(figsize=(7, 3), facecolor='#0e1117')
-                ax_m.set_facecolor('#0e1117')
-                                ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
-                                st.pyplot(fig_m)
+            mt1, mt2 = st.tabs(["Value Discovery", "Match Predictor"])
+            with mt1:
+                st.markdown("### Real-Time Value Discovery")
+                ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
+                probs = model.predict_proba(test_data[features])
+                c_map = {cls: i for i, cls in enumerate(le.classes_)}
+                v_list = []
+                for outcome in ['H', 'D', 'A']:
+                    p_col = probs[:, c_map[outcome]]
+                    ev_col = (p_col * test_data[f'B365{outcome}']) - 1
+                    for i, ev in enumerate(ev_col):
+                        if ev > ev_t:
+                            r = test_data.iloc[i]
+                            v_list.append({
+                                'Date': r['Date'].strftime('%Y-%m-%d'),
+                                'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}",
+                                'Pick': outcome,
+                                'Odds': r[f'B365{outcome}'],
+                                'Edge': f"{ev:.1%}"
+                            })
+                if v_list: st.table(pd.DataFrame(v_list).sort_values('Date', ascending=False).head(15))
+                else: st.warning("No signals found.")
+            
+            with mt2:
+                st.markdown("### Predictive Match Terminal")
+                teams = sorted(latest['Team'].unique())
+                tc1, tc2 = st.columns(2)
+                ht, at = tc1.selectbox("HOME", teams, index=teams.index('Man United')), tc2.selectbox("AWAY", teams, index=teams.index('Arsenal'))
+                o1, o2, o3 = st.columns(3)
+                ho, do, ao = o1.number_input("Home", value=2.0), o2.number_input("Draw", value=3.4), o3.number_input("Away", value=3.5)
                 
-                except Exception as e:
-                    st.error(f"System Error: {e}")
-                
+                if st.button("EXECUTE FORECAST"):
+                    hs, as_ = latest[latest['Team'] == ht].iloc[0], latest[latest['Team'] == at].iloc[0]
+                    inp = pd.DataFrame([{'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'], 'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'], 'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'], 'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners']}])
+                    rp = model.predict_proba(inp[features])[0]
+                    
+                    fig_m, ax_m = plt.subplots(figsize=(7, 3), facecolor='#0e1117')
+                    ax_m.set_facecolor('#0e1117')
+                    ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
+                    ax_m.tick_params(colors='#94a3b8')
+                    st.pyplot(fig_m)
+
+except Exception as e:
+    st.error(f"System Error: {e}")
