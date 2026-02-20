@@ -4,301 +4,194 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
 from predictive_model import load_and_clean_data, calculate_rolling_stats, train_and_evaluate, get_latest_stats
+
+# --- Load Environment Variables ---
+# Specify exact path to ensure it finds it
+env_path = os.path.join(os.getcwd(), '.env')
+load_dotenv(dotenv_path=env_path)
 
 warnings.filterwarnings('ignore')
 
-# --- Configuration & Modern Styling ---
-st.set_page_config(layout="wide", page_title="PL Analytics Pro | Predictive Engine")
+# --- Page Config & Styling ---
+st.set_page_config(layout="wide", page_title="AI Predictive Engine | PL Analytics")
 
-# Modern Trading-Style CSS
+# Debug info (hidden by default)
+if os.getenv("GEMINI_API_KEY"):
+    st.sidebar.caption("✅ System: .env key detected")
+else:
+    st.sidebar.caption("⚠️ System: No .env key found")
+
 st.markdown("""
     <style>
-    /* Main background */
-    .stApp {
-        background-color: #0e1117;
-        color: #fafafa;
-    }
-    
-    /* Metric Cards */
-    [data-testid="stMetricValue"] {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #00d4ff;
-    }
-    [data-testid="stMetricLabel"] {
-        font-size: 0.9rem;
-        color: #94a3b8;
-        text-transform: uppercase;
-        letter-spacing: 0.05rem;
-    }
-    div[data-testid="metric-container"] {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Tabs Styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #1e293b;
-        padding: 8px;
-        border-radius: 12px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 45px;
-        background-color: transparent;
-        border-radius: 8px;
-        color: #94a3b8;
-        border: none;
-        padding: 0 24px;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #3b82f6 !important;
-        color: white !important;
-    }
-
-    /* Dataframe Header */
-    .stDataFrame {
-        border: 1px solid #334155;
-        border-radius: 12px;
-    }
-    
-    /* Headers */
-    h1, h2, h3 {
-        color: #f1f5f9;
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #0f172a;
-        border-right: 1px solid #334155;
-    }
+    .stApp { background-color: #ffffff; color: #1e293b; }
+    .stMetric { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; }
+    .stTabs [aria-selected="true"] { background-color: #3b82f6 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Data Loading (Shared and Cached) ---
-@st.cache_data
-def load_all_dashboard_data():
-    df_ml_base = load_and_clean_data('all_seasons.csv')
-    df_with_stats = calculate_rolling_stats(df_ml_base)
-    model, le, features, test_data, latest_stats = None, None, None, None, None
+# --- LLM Helper Functions ---
+def get_llm_response(prompt, api_key):
     try:
-        model, le, features, test_data = train_and_evaluate(df_with_stats)
-        latest_stats = get_latest_stats(df_with_stats)
-    except: pass
-    
-    df_hist = pd.read_csv('all_seasons.csv', low_memory=False)
-    df_hist.columns = df_hist.columns.str.replace('ï»¿', '').str.strip()
-    df_hist.dropna(subset=['Season', 'FTR', 'B365H'], inplace=True)
-    df_hist['B365H_Prob'] = 1 / df_hist['B365H']
-    df_hist['HomeWin_Outcome'] = (df_hist['FTR'] == 'H').astype(int)
-    
-    return df_ml_base, df_with_stats, model, le, features, test_data, latest_stats, df_hist
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        system_context = "You are a Premier League Sports Betting AI Agent. You are an expert in Kelly Criterion, Elo Ratings, and football statistics. Provide concise, professional advice."
+        full_prompt = f"{system_context}\n\nUser: {prompt}"
+        response = model.generate_content(full_prompt)
+        return response.text
+    except Exception as e:
+        return f"Error connecting to Gemini: {str(e)}"
 
-# --- Original Project 1 Logic ---
-def calculate_brier_scores(df_data):
-    df_data['SquaredError'] = (df_data['B365H_Prob'] - df_data['HomeWin_Outcome'])**2
-    brier_scores = df_data.groupby('Season')['SquaredError'].mean().reset_index()
-    brier_scores.rename(columns={'SquaredError': 'BrierScore'}, inplace=True)
-    return brier_scores.sort_values('Season')
+@st.cache_data
+def load_all_data():
+    df = load_and_clean_data('all_seasons.csv')
+    df_stats = calculate_rolling_stats(df)
+    model, le, features, test_data = train_and_evaluate(df_stats)
+    latest = get_latest_stats(df_stats)
+    return df, df_stats, model, le, features, test_data, latest
+
+# --- Sidebar Architecture ---
+st.sidebar.title("PL Analytics Pro")
+st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
+
+# LLM Configuration Logic
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔑 LLM Configuration")
+
+# 1. Try to get from .env or streamlit secrets first
+stored_key = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
+
+# 2. Provide an input field that defaults to the stored key
+gemini_api_key = st.sidebar.text_input(
+    "Gemini API Key", 
+    value=stored_key if stored_key else "", 
+    type="password", 
+    help="Key loaded from .env or Secrets if present. Get one at https://ai.google.dev/"
+)
+
+if not gemini_api_key:
+    st.sidebar.warning("Agent Offline: Enter your Gemini API Key to wake it up.")
+else:
+    st.sidebar.success("Agent Online: Live LLM Active")
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🤖 AI Strategy Agent")
+
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "assistant", "content": "I am your live LLM-powered Strategy Agent. Ask me anything about betting logic!"}]
+
+for msg in st.session_state.messages:
+    with st.sidebar.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+if prompt := st.sidebar.chat_input("Ask the Agent..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.sidebar.chat_message("user"):
+        st.write(prompt)
+
+    with st.sidebar.chat_message("assistant"):
+        if gemini_api_key:
+            with st.spinner("Analyzing..."):
+                response = get_llm_response(prompt, gemini_api_key)
+        else:
+            response = "I am currently in 'Offline Mode'. Please provide a Gemini API Key in the sidebar or .env file."
+        
+        st.write(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
 
 # --- Main App Execution ---
 try:
     with st.spinner("Initializing Predictive Engine..."):
-        df_ml, df_with_stats, model, le, features, test_data, latest, df_hist = load_all_dashboard_data()
+        df_raw, df_stats, ml_model, le, features, test_data, latest = load_all_data()
 
-    # Sidebar Header
-    st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=80)
-    st.sidebar.title("PL Analytics Pro")
-    st.sidebar.markdown("---")
-    
-    app_mode = st.sidebar.radio("ENGINE MODE", 
-                                ["Historical Efficiency (P1)", 
-                                 "Predictive Intelligence (P2)"])
-    
-    st.sidebar.markdown("---")
-    
-    # --- AI AGENT SIDEBAR PANEL ---
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🤖 AI Strategy Agent")
-    
-    # Initialize chat history
-    if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": "I am your PL Strategy Agent. Ask me about match risks, Kelly Criterion, or current market value."}]
+    st.title("🧠 AI-Powered Predictive Analytics")
+    st.markdown("##### Project 2: Combining Random Forest Logic with Live LLM Intelligence")
 
-    # Display chat messages
-    for msg in st.session_state.messages:
-        with st.sidebar.chat_message(msg["role"]):
-            st.write(msg["content"])
+    tab1, tab2, tab3 = st.tabs(["🔮 Match Prediction", "💰 Value Discovery", "📊 Model Performance"])
 
-    # Chat input
-    if prompt := st.sidebar.chat_input("Ask the Agent..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.sidebar.chat_message("user"):
-            st.write(prompt)
-
-        # Generate Agent Response based on logic
-        with st.sidebar.chat_message("assistant"):
-            response = ""
-            if "risk" in prompt.lower():
-                response = "Current market risk is MODERATE. Volatility in mid-table away games is high. Stick to Home Value > 12%."
-            elif "kelly" in prompt.lower() or "bankroll" in prompt.lower():
-                response = "I recommend a Fractional Kelly (0.25) to preserve capital. Current suggested stake: 2% per unit."
-            elif "value" in prompt.lower():
-                response = "The 'Value Discovery' tab shows the highest edge is currently in Draw outcomes for defensive home sides."
-            else:
-                response = "I've analyzed the 20-year trend: Focus on teams with positive Elo momentum in their last 3 fixtures."
-            
-            st.write(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-    
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Data: 2003 - 2026 Seasonality")
-
-    if app_mode == "Historical Efficiency (P1)":
-        st.title("📊 Market Efficiency Analysis")
-        st.markdown("#### Project 1: Analyzing Bookmaker Performance & Brier Scores")
+    with tab1:
+        st.header("Match Intelligence Terminal")
+        teams = sorted(latest['Team'].unique())
+        c1, c2 = st.columns(2)
+        h_team = c1.selectbox("Home Side", teams, index=teams.index('Man United'))
+        a_team = c2.selectbox("Away Side", teams, index=teams.index('Arsenal'))
         
-        # Top Level Metrics
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Matches", f"{len(df_hist):,}")
-        m2.metric("Seasons Analysed", len(df_hist['Season'].unique()))
-        m3.metric("Avg Home Win %", f"{(df_hist['FTR'] == 'H').mean():.1%}")
-        m4.metric("Market Accuracy", "74.2%") # Representative stat
-
-        t1, t2 = st.tabs(["Market Accuracy Trend", "Historical Team Database"])
+        st.divider()
+        o1, o2, o3 = st.columns(3)
+        h_odds = o1.number_input("Home Odds", value=2.0)
+        d_odds = o2.number_input("Draw Odds", value=3.4)
+        a_odds = o3.number_input("Away Odds", value=3.5)
         
-        with t1:
-            st.markdown("### Brier Score Decay Curve")
-            b_scores = calculate_brier_scores(df_hist)
-            fig1, ax1 = plt.subplots(figsize=(10, 4), facecolor='#0e1117')
-            ax1.set_facecolor('#0e1117')
-            ax1.plot(b_scores['Season'], b_scores['BrierScore'], marker='s', color='#3b82f6', linewidth=2, label='Brier Score')
-            ax1.set_ylabel('Accuracy Error', color='#94a3b8')
-            ax1.tick_params(colors='#94a3b8', labelsize=8)
-            plt.xticks(rotation=45)
-            plt.grid(color='#334155', linestyle='--', alpha=0.5)
-            st.pyplot(fig1)
-            st.info("A decreasing Brier Score indicates that bookmakers are becoming significantly more efficient at pricing Home Win probabilities over time.")
-
-        with t2:
-            st.markdown("### Team Historical Performance")
-            c1, c2 = st.columns(2)
-            sel_s = c1.selectbox("Season", df_hist['Season'].unique()[::-1])
-            s_df = df_hist[df_hist['Season'] == sel_s]
-            sel_t = c2.selectbox("Team", sorted(s_df['HomeTeam'].unique()))
+        if st.button("RUN PREDICTION"):
+            h_s, a_s = latest[latest['Team'] == h_team].iloc[0], latest[latest['Team'] == a_team].iloc[0]
+            input_row = pd.DataFrame([{
+                'Home_Rolling_GoalsFor': h_s['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': h_s['Rolling_GoalsAgainst'],
+                'Home_Rolling_Shots': h_s['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': h_s['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': h_s['Rolling_Corners'],
+                'Away_Rolling_GoalsFor': a_s['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': a_s['Rolling_GoalsAgainst'],
+                'Away_Rolling_Shots': a_s['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': a_s['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': a_s['Rolling_Corners']
+            }])
             
-            t_df = s_df[(s_df['HomeTeam'] == sel_t) | (s_df['AwayTeam'] == sel_t)]
-            st.dataframe(t_df[['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR']].sort_values('Date', ascending=False), width='stretch')
-
-    else: # Predictive Intelligence (P2)
-        st.title("🤖 Predictive Intelligence Engine")
-        st.markdown("#### Project 2: Forward-Looking Machine Learning & Value Discovery")
-        
-        if model is None:
-            st.error("Engine failure: Predictive model failed to initialize.")
-        else:
-            # ML Metrics Row
-            last_season = df_ml['Season'].unique()[-1]
-            y_test = test_data['Target']
-            y_pred = model.predict(test_data[features])
-            from sklearn.metrics import accuracy_score
+            probs = ml_model.predict_proba(input_row[features])[0]
+            class_map = {cls: i for i, cls in enumerate(le.classes_)}
+            p_h, p_d, p_a = probs[class_map['H']], probs[class_map['D']], probs[class_map['A']]
             
-            mc1, mc2, mc3, mc4 = st.columns(4)
-            mc1.metric("Model Precision", f"{accuracy_score(y_test, y_pred):.1%}")
-            mc2.metric("Active Features", "10")
-            mc3.metric("Test Period", last_season)
-            mc4.metric("Algorithm", "Random Forest")
-
-            mt1, mt2, mt3 = st.tabs(["Discovery: Value Opportunities", "Terminal: Match Predictor", "Diagnostics: Model Quality"])
+            res_c1, res_c2 = st.columns([1, 1])
+            with res_c1:
+                st.subheader("Forecast Probabilities")
+                fig, ax = plt.subplots(figsize=(6, 4))
+                sns.barplot(x=['Home', 'Draw', 'Away'], y=[p_h, p_d, p_a], palette='Blues_d')
+                ax.set_ylim(0, 1)
+                st.pyplot(fig)
             
-            with mt1:
-                st.markdown("### Real-Time Value Discovery")
-                ev_t = st.slider("Minimum Edge (Expected Value) %", 0, 40, 10) / 100
+            with res_c2:
+                st.subheader("Value Assessment")
+                ev_h, ev_d, ev_a = (p_h * h_odds)-1, (p_d * d_odds)-1, (p_a * a_odds)-1
+                st.write(f"Home EV: {ev_h:+.1%}")
+                st.write(f"Draw EV: {ev_d:+.1%}")
+                st.write(f"Away EV: {ev_a:+.1%}")
                 
-                probs = model.predict_proba(test_data[features])
-                c_map = {cls: i for i, cls in enumerate(le.classes_)}
-                td = test_data.copy()
-                
-                v_list = []
-                for outcome in ['H', 'D', 'A']:
-                    p_col = probs[:, c_map[outcome]]
-                    ev_col = (p_col * td[f'B365{outcome}']) - 1
-                    for i, ev in enumerate(ev_col):
-                        if ev > ev_t:
-                            r = td.iloc[i]
-                            v_list.append({
-                                'Date': r['Date'].strftime('%Y-%m-%d'),
-                                'Signal': f"{r['HomeTeam']} vs {r['AwayTeam']}",
-                                'Pick': outcome,
-                                'Odds': r[f'B365{outcome}'],
-                                'Model Prob': f"{p_col[i]:.1%}",
-                                'Edge (EV)': f"{ev:.1%}",
-                                'Status': '✅' if r['FTR'] == outcome else '❌'
-                            })
-                
-                if v_list:
-                    st.table(pd.DataFrame(v_list).sort_values('Date', ascending=False).head(15))
+                if max(ev_h, ev_d, ev_a) > 0.1:
+                    st.success("🎯 SIGNAL DETECTED")
                 else:
-                    st.warning("No signals detected at current threshold.")
+                    st.warning("⚠️ MARKET EFFICIENT")
 
-            with mt2:
-                st.markdown("### Predictive Match Terminal")
-                teams = sorted(latest['Team'].unique())
-                tc1, tc2 = st.columns(2)
-                ht = tc1.selectbox("HOME SIDE", teams, index=teams.index('Man United') if 'Man United' in teams else 0)
-                at = tc2.selectbox("AWAY SIDE", teams, index=teams.index('Arsenal') if 'Arsenal' in teams else 1)
-                
-                st.markdown("#### Market Odds Input")
-                oc1, oc2, oc3 = st.columns(3)
-                ho = oc1.number_input("Home", value=2.0)
-                do = oc2.number_input("Draw", value=3.4)
-                ao = oc3.number_input("Away", value=3.5)
-                
-                if st.button("EXECUTE FORECAST"):
-                    hs = latest[latest['Team'] == ht].iloc[0]
-                    as_ = latest[latest['Team'] == at].iloc[0]
-                    
-                    inp = pd.DataFrame([{
-                        'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'],
-                        'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'],
-                        'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'],
-                        'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners']
-                    }])
-                    
-                    rp = model.predict_proba(inp[features])[0]
-                    ph, pd_, pa = rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]
-                    
-                    st.markdown("---")
-                    rc1, rc2 = st.columns([2, 1])
-                    with rc1:
-                        fig_m, ax_m = plt.subplots(figsize=(7, 3.5), facecolor='#0e1117')
-                        ax_m.set_facecolor('#0e1117')
-                        ax_m.barh(['Home', 'Draw', 'Away'], [ph, pd_, pa], color=['#ef4444', '#3b82f6', '#10b981'])
-                        ax_m.tick_params(colors='#94a3b8')
-                        st.pyplot(fig_m)
-                    
-                    with rc2:
-                        evh, evd, eva = ph*ho-1, pd_*do-1, pa*ao-1
-                        best = np.argmax([evh, evd, eva])
-                        st.markdown(f"**Home EV:** {evh:+.1%}")
-                        st.markdown(f"**Draw EV:** {evd:+.1%}")
-                        st.markdown(f"**Away EV:** {eva:+.1%}")
-                        if max([evh, evd, eva]) > 0.05:
-                            st.success(f"SIGNAL: {['HOME', 'DRAW', 'AWAY'][best]}")
+    with tab2:
+        st.header("Value Discovery")
+        ev_thresh = st.slider("Min Edge %", 0, 50, 15) / 100
+        probs_all = ml_model.predict_proba(test_data[features])
+        class_map = {cls: i for i, cls in enumerate(le.classes_)}
+        
+        value_bets = []
+        for outcome in ['H', 'D', 'A']:
+            p_col = probs_all[:, class_map[outcome]]
+            ev_col = (p_col * test_data[f'B365{outcome}']) - 1
+            for i, ev in enumerate(ev_col):
+                if ev > ev_thresh:
+                    row = test_data.iloc[i]
+                    value_bets.append({
+                        'Date': row['Date'].strftime('%Y-%m-%d'),
+                        'Match': f"{row['HomeTeam']} vs {row['AwayTeam']}",
+                        'Pick': outcome,
+                        'Odds': row[f'B365{outcome}'],
+                        'EV': f"{ev:.1%}"
+                    })
+        st.table(pd.DataFrame(value_bets).sort_values('Date', ascending=False).head(20))
 
-            with mt3:
-                st.markdown("### Model Quality Diagnostics")
-                cm = confusion_matrix(y_test, y_pred)
-                from sklearn.metrics import confusion_matrix
-                fig_cm, ax_cm = plt.subplots(figsize=(5, 4), facecolor='#0e1117')
-                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=le.classes_, yticklabels=le.classes_, ax=ax_cm)
-                ax_cm.set_title("Confusion Matrix", color='white')
-                st.pyplot(fig_cm)
+    with tab3:
+        st.header("Performance Diagnostics")
+        y_test = test_data['Target']
+        acc = accuracy_score(y_test, ml_model.predict(test_data[features]))
+        st.metric("Model Accuracy", f"{acc:.1%}")
+        
+        from sklearn.metrics import confusion_matrix
+        cm = confusion_matrix(y_test, ml_model.predict(test_data[features]))
+        fig_cm, ax_cm = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=le.classes_, yticklabels=le.classes_)
+        st.pyplot(fig_cm)
 
 except Exception as e:
-    st.error(f"System Error: {e}")
+    st.error(f"Engine Error: {e}")
