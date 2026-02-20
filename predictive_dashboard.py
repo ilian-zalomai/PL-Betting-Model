@@ -126,7 +126,9 @@ try:
     st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
     st.sidebar.title("PL Analytics Pro")
     
-    app_mode = st.sidebar.radio("ENGINE MODE", ["Historical Efficiency (P1)", "Predictive Intelligence (P2)"])
+    app_mode = st.sidebar.radio("ENGINE MODE", 
+                                ["Predictive Intelligence (P2)", "Historical Efficiency (P1)"],
+                                index=0)
     
     # LLM Config
     st.sidebar.markdown("---")
@@ -213,9 +215,6 @@ try:
                 ax_m.set_facecolor('#0e1117')
                 ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
                 st.pyplot(fig_m)
-
-except Exception as e:
-    st.error(f"System Error: {e}")
 
 except Exception as e:
     st.error(f"System Error: {e}")
