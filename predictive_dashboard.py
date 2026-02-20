@@ -176,17 +176,58 @@ try:
             teams = sorted(latest['Team'].unique())
             tc1, tc2 = st.columns(2)
             ht, at = tc1.selectbox("HOME", teams, index=teams.index('Man United')), tc2.selectbox("AWAY", teams, index=teams.index('Arsenal'))
+            
+            st.markdown("#### Market Odds Input")
             o1, o2, o3 = st.columns(3)
             ho, do, ao = o1.number_input("Home", value=2.0), o2.number_input("Draw", value=3.4), o3.number_input("Away", value=3.5)
+            
             if st.button("EXECUTE FORECAST"):
                 hs, as_ = latest[latest['Team'] == ht].iloc[0], latest[latest['Team'] == at].iloc[0]
                 inp = pd.DataFrame([{'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'], 'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'], 'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'], 'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners'], 'Home_Elo': hs['Elo'], 'Away_Elo': as_['Elo'], 'Elo_Diff': hs['Elo'] - as_['Elo']}])
                 rp = model.predict_proba(inp[features])[0]
-                fig_m, ax_m = plt.subplots(figsize=(7, 3.5), facecolor='#0e1117')
-                ax_m.set_facecolor('#0e1117')
-                ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
-                ax_m.tick_params(colors='#94a3b8')
-                st.pyplot(fig_m)
+                
+                # Probs mapping
+                p_h, p_d, p_a = rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]
+                b_h, b_d, b_a = 1/ho, 1/do, 1/ao
+                
+                st.divider()
+                res_col1, res_col2 = st.columns([3, 2])
+                
+                with res_col1:
+                    st.subheader("Model vs. Market Comparison")
+                    comp_data = pd.DataFrame({
+                        'Outcome': ['Home Win', 'Draw', 'Away Win'],
+                        'Model Prob': [p_h, p_d, p_a],
+                        'Bookie Implied': [b_h, b_d, b_a],
+                        'Edge (EV)': [(p_h*ho)-1, (p_d*do)-1, (p_a*ao)-1]
+                    })
+                    st.table(comp_data.style.format({
+                        'Model Prob': '{:.1%}', 'Bookie Implied': '{:.1%}', 'Edge (EV)': '{:+.1%}'
+                    }))
+                    
+                    # Grouped Bar Chart
+                    fig_comp, ax_comp = plt.subplots(figsize=(8, 4), facecolor='#0e1117')
+                    ax_comp.set_facecolor('#0e1117')
+                    x = np.arange(3)
+                    width = 0.35
+                    ax_comp.bar(x - width/2, [p_h, p_d, p_a], width, label='Model', color='#00d4ff')
+                    ax_comp.bar(x + width/2, [b_h, b_d, b_a], width, label='Market', color='#94a3b8')
+                    ax_comp.set_xticks(x)
+                    ax_comp.set_xticklabels(['Home', 'Draw', 'Away'], color='white')
+                    ax_comp.legend()
+                    st.pyplot(fig_comp)
+
+                with res_col2:
+                    st.subheader("Strategic Verdict")
+                    evs = [(p_h*ho)-1, (p_d*do)-1, (p_a*ao)-1]
+                    best_idx = np.argmax(evs)
+                    if evs[best_idx] > 0.05:
+                        st.success(f"🎯 **RECOMMENDATION:** {['Home Win', 'Draw', 'Away Win'][best_idx]}")
+                        st.write(f"The model identifies a **{evs[best_idx]:.1%} edge** relative to current market prices.")
+                    else:
+                        st.warning("⚠️ **NO CLEAR VALUE:** Market appears efficient for this fixture.")
+                    
+                    st.info(f"**Elo Context:** {ht} ({int(hs['Elo'])}) vs {at} ({int(as_['Elo'])})")
 
         with mt3:
             st.markdown("### Model Reliability & Market Benchmark")
