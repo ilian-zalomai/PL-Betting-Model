@@ -35,7 +35,7 @@ load_dotenv(dotenv_path=env_path)
 
 warnings.filterwarnings('ignore')
 
-# --- Page Config & Styling ---
+# --- Page Config & Modern Styling ---
 st.set_page_config(layout="wide", page_title="PL Analytics Pro | Predictive Engine")
 
 st.markdown("""
@@ -90,27 +90,24 @@ def calculate_brier_scores(df_data):
     df_data['SquaredError'] = (df_data['B365H_Prob'] - df_data['HomeWin_Outcome'])**2
     return df_data.groupby('Season')['SquaredError'].mean().reset_index().rename(columns={'SquaredError': 'BrierScore'}).sort_values('Season')
 
-# --- Sidebar ---
+# --- Sidebar Architecture ---
 st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
 st.sidebar.title("PL Analytics Pro")
+
 app_mode = st.sidebar.radio("ENGINE MODE", ["Historical Efficiency (P1)", "Predictive Intelligence (P2)"], index=1)
 
-# Algorithm Selector & Breakdown (Only for P2)
+# Algorithm Selector & Breakdown (Cleaned Sidebar)
 selected_algo = "Random Forest"
 if app_mode == "Predictive Intelligence (P2)":
     st.sidebar.markdown("---")
     st.sidebar.subheader("⚙️ Algorithm Config")
     selected_algo = st.sidebar.selectbox("Active Model", ["Random Forest", "Logistic Regression", "XGBoost", "Cumulative Ensemble"])
-    
     st.sidebar.subheader("📊 Algorithm Breakdown")
-    # Small helper to show accuracy per algo in sidebar
-    st.sidebar.caption("Test Set Accuracy:")
-    # We will display these after models are loaded in main try block
 
+# OpenAI Research Agent (Silent Loading)
 st.sidebar.markdown("---")
 st.sidebar.subheader("🤖 AI Research Agent")
-stored_openai_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
-openai_api_key = st.sidebar.text_input("OpenAI API Key", value=stored_openai_key if stored_openai_key else "", type="password")
+openai_api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
 
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "I am your Research Agent. Ask me for latest team news!"}]
@@ -121,15 +118,15 @@ if prompt := st.sidebar.chat_input("Ask the Agent..."):
     with st.sidebar.chat_message("user"): st.write(prompt)
     with st.sidebar.chat_message("assistant"):
         if openai_api_key: response = run_openai_agent(prompt, openai_api_key)
-        else: response = "Agent Offline: Key missing."
+        else: response = "Agent Offline: API Key missing in System Secrets."
         st.write(response); st.session_state.messages.append({"role": "assistant", "content": response})
 
-# --- Main App ---
+# --- Main App Execution ---
 try:
     with st.spinner("Loading Engine..."):
         df_raw, df_elo, df_stats, models, le, features, test_data, latest, df_hist = load_all_dashboard_data()
     
-    # Render Algorithm Breakdown in Sidebar now that data is loaded
+    # Render Algorithm Accuracy in Sidebar
     if app_mode == "Predictive Intelligence (P2)":
         y_true = test_data['Target']
         for name, m in models.items():
@@ -172,7 +169,7 @@ try:
                         r = test_data.iloc[i]
                         v_list.append({
                             'Date': r['Date'].strftime('%Y-%m-%d'),
-                            'Match': f"{row['HomeTeam']} vs {row['AwayTeam']}" if 'row' in locals() else f"{r['HomeTeam']} vs {r['AwayTeam']}",
+                            'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}",
                             'Pick': outcome,
                             'Odds': r[f'B365{outcome}'],
                             'Edge': f"{ev:.1%}"
@@ -184,29 +181,16 @@ try:
             st.markdown("### Predictive Match Terminal")
             teams = sorted(latest['Team'].unique()); tc1, tc2 = st.columns(2); ht, at = tc1.selectbox("HOME", teams, index=teams.index('Man United')), tc2.selectbox("AWAY", teams, index=teams.index('Arsenal'))
             o1, o2, o3 = st.columns(3); ho, do, ao = o1.number_input("Home", value=2.0), o2.number_input("Draw", value=3.4), o3.number_input("Away", value=3.5)
-            
             if st.button("EXECUTE FORECAST"):
                 hs, as_ = latest[latest['Team'] == ht].iloc[0], latest[latest['Team'] == at].iloc[0]
-                input_dict = {
-                    'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'],
-                    'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'],
-                    'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'],
-                    'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners'],
-                    'Home_Elo': hs['Elo'], 'Away_Elo': as_['Elo'], 'Elo_Diff': hs['Elo'] - as_['Elo']
-                }
+                input_dict = {'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'], 'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'], 'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'], 'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners'], 'Home_Elo': hs['Elo'], 'Away_Elo': as_['Elo'], 'Elo_Diff': hs['Elo'] - as_['Elo']}
                 rp = active_model.predict_proba(pd.DataFrame([input_dict]))[0]
                 p_h, p_d, p_a = rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]
                 b_h, b_d, b_a = 1/ho, 1/do, 1/ao
-                
                 st.divider(); res_col1, res_col2 = st.columns([3, 2])
                 with res_col1:
                     st.subheader("Model vs. Market Comparison")
-                    comp_data = pd.DataFrame({
-                        'Outcome': ['Home Win', 'Draw', 'Away Win'],
-                        'Model Prob': [p_h, p_d, p_a],
-                        'Bookie Implied': [b_h, b_d, b_a],
-                        'Edge (EV)': [(p_h*ho)-1, (p_d*do)-1, (p_a*ao)-1]
-                    })
+                    comp_data = pd.DataFrame({'Outcome': ['Home Win', 'Draw', 'Away Win'], 'Model Prob': [p_h, p_d, p_a], 'Bookie Implied': [b_h, b_d, b_a], 'Edge (EV)': [(p_h*ho)-1, (p_d*do)-1, (p_a*ao)-1]})
                     st.table(comp_data.style.format({'Model Prob': '{:.1%}', 'Bookie Implied': '{:.1%}', 'Edge (EV)': '{:+.1%}'}))
                     fig_comp, ax_comp = plt.subplots(figsize=(8, 4), facecolor='#0e1117'); ax_comp.set_facecolor('#0e1117'); x = np.arange(3); width = 0.35
                     ax_comp.bar(x - width/2, [p_h, p_d, p_a], width, label='Model', color='#00d4ff'); ax_comp.bar(x + width/2, [b_h, b_d, b_a], width, label='Market', color='#94a3b8')
@@ -219,9 +203,25 @@ try:
                     st.info(f"**Elo Context:** {ht} ({int(hs['Elo'])}) vs {at} ({int(as_['Elo'])})")
 
         with mt3:
-            st.subheader(f"Reliability ({selected_algo})")
-            prob_true, prob_pred = get_calibration_data(active_model, test_data[features], y_test, le)
-            fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117'); ax_cal.set_facecolor('#0e1117'); ax_cal.plot([0, 1], [0, 1], "k:"); ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6'); st.pyplot(fig_cal)
+            st.markdown("### Model Reliability & Market Benchmark")
+            diag_c1, diag_c2 = st.columns(2)
+            with diag_c1:
+                st.subheader("Reliability (Calibration)")
+                prob_true, prob_pred = get_calibration_data(active_model, test_data[features], y_test, le)
+                fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117'); ax_cal.set_facecolor('#0e1117'); ax_cal.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated"); ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6', label="Model"); ax_cal.set_ylabel("Actual Frequency", color='white'); ax_cal.set_xlabel("Predicted Probability", color='white'); ax_cal.tick_params(colors='white'); st.pyplot(fig_cal)
+            with diag_c2:
+                st.subheader("Market Comparison (Brier)")
+                bookies = {'B365': 'B365H', 'Bwin': 'BWH', 'VCBet': 'VCH', 'Model': 'Prob_H'}
+                test_data['Prob_H'] = active_model.predict_proba(test_data[features])[:, c_map['H']]
+                test_data['HW_Actual'] = (test_data['FTR'] == 'H').astype(int)
+                b_results = []
+                for name, col in bookies.items():
+                    if col in test_data.columns:
+                        tmp = test_data.dropna(subset=[col])
+                        if name == 'Model': b_score = np.mean((tmp[col] - tmp['HW_Actual'])**2)
+                        else: b_score = np.mean(((1/tmp[col]) - tmp['HW_Actual'])**2)
+                        b_results.append({'Bookie': name, 'Brier': b_score})
+                st.table(pd.DataFrame(b_results).sort_values('Brier'))
 
 except Exception as e:
     st.error(f"System Error: {e}")
