@@ -214,5 +214,9 @@ try:
                 rp = model.predict_proba(inp[features])[0]
                 fig_m, ax_m = plt.subplots(figsize=(7, 3), facecolor='#0e1117')
                 ax_m.set_facecolor('#0e1117')
-                ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
-                st
+                                ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
+                                st.pyplot(fig_m)
+                
+                except Exception as e:
+                    st.error(f"System Error: {e}")
+                
