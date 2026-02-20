@@ -166,7 +166,7 @@ try:
         y_test = test_data['Target']; y_pred = active_model.predict(test_data[features])
         mc1.metric("Model Precision", f"{accuracy_score(y_test, y_pred):.1%}"); mc2.metric("Active Features", len(features)); mc3.metric("Test Period", df_raw['Season'].unique()[-1]); mc4.metric("Algorithm", selected_algo)
         
-        mt1, mt2, mt3 = st.tabs(["Value Discovery", "Match Predictor", "Deep Diagnostics"])
+        mt1, mt2, mt3, mt4 = st.tabs(["Value Discovery", "Match Predictor", "Deep Diagnostics", "Research & Documentation"])
         with mt1:
             st.markdown(f"### Real-Time Value Discovery ({selected_algo})")
             ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
@@ -234,6 +234,56 @@ try:
                         else: b_score = np.mean(((1/tmp[col]) - tmp['HW_Actual'])**2)
                         b_results.append({'Bookie': name, 'Brier': b_score})
                 st.table(pd.DataFrame(b_results).sort_values('Brier'))
+
+        with mt4:
+            st.header("🔬 Project Evidence & Documentation")
+            
+            doc_tabs = st.tabs(["Market Efficiency (Vig Analysis)", "Technical Methodology", "AI Development Trace"])
+            
+            with doc_tabs[0]:
+                st.subheader("Bookmaker Overround (Vig) Trend")
+                st.markdown("This analysis tests market efficiency by measuring the 'Overround' (the bookmaker's margin) across multiple seasons.")
+                # Calculate margin for each season
+                df_raw['Margin'] = (1/df_raw['B365H'] + 1/df_raw['B365D'] + 1/df_raw['B365A']) - 1
+                margin_trend = df_raw.groupby('Season')['Margin'].mean().reset_index()
+                
+                fig_m, ax_m = plt.subplots(figsize=(10, 4), facecolor='#0e1117')
+                ax_m.set_facecolor('#0e1117')
+                ax_m.plot(margin_trend['Season'], margin_trend['Margin'], marker='o', color='#00d4ff')
+                ax_m.set_title("Average Bookmaker Margin per Season", color='white')
+                ax_m.set_ylabel("Margin %", color='#94a3b8')
+                ax_m.tick_params(colors='#94a3b8', labelsize=8)
+                plt.xticks(rotation=45)
+                st.pyplot(fig_m)
+                st.info("A decreasing or stable margin suggests a highly efficient market where the 'cost of betting' is optimized for the public, making it harder for simple models to find an edge.")
+
+            with doc_tabs[1]:
+                st.subheader("Technical Methodology")
+                st.markdown("""
+                ### 1. Forward-Looking Feature Engineering
+                - **Elo Rating System:** Instead of retrospective wins, we use a dynamic Elo ranking updated after every match since 2003. This provides a 'true' strength baseline.
+                - **Rolling Performance Stats:** Form is captured via 5-game rolling windows of Goals, Shots, Shots on Target, and Corners.
+                - **Total Features:** 13 predictive metrics per match.
+
+                ### 2. Multi-Model Ensemble
+                - **Algorithms:** Random Forest, Logistic Regression, and XGBoost.
+                - **Cumulative Ensemble:** A 'wisdom of the crowd' model that averages probabilities across all three architectures to reduce individual model bias.
+
+                ### 3. Validation Strategy
+                - **Chronological Split:** We train on all data from 2003 up to 2024 and test exclusively on the 2025-26 season to ensure zero data leakage.
+                """)
+
+            with doc_tabs[2]:
+                st.subheader("AI Development Log (Traceability)")
+                st.markdown("""
+                This project was developed in partnership with **Gemini CLI** (an agentic coding partner).
+                
+                **Key AI Contributions:**
+                1. **Architecture:** AI assisted in designing the 13-feature rolling statistics pipeline.
+                2. **Optimization:** AI implemented the `CumulativeEnsemble` class to unify multiple algorithms.
+                3. **Diagnostics:** AI suggested and implemented the Reliability Diagram (Calibration Curve) to satisfy instructor feedback on statistical rigor.
+                4. **Research Agent:** AI integrated an OpenAI-powered LLM with DuckDuckGo web search to provide real-time injury and news analysis.
+                """)
 
 except Exception as e:
     st.error(f"System Error: {e}")
