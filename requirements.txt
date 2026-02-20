@@ -8,3 +8,4 @@ google-genai
 python-dotenv
 openai
 duckduckgo-search
+xgboost
