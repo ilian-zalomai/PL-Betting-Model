@@ -6,94 +6,44 @@ import seaborn as sns
 import warnings
 import os
 from sklearn.metrics import accuracy_score, confusion_matrix
-from predictive_model import load_and_clean_data, calculate_rolling_stats, train_and_evaluate, get_latest_stats
+from predictive_model import (load_and_clean_data, calculate_elo, calculate_rolling_stats, 
+                              train_and_evaluate, get_latest_stats, get_calibration_data)
 
 warnings.filterwarnings('ignore')
 
 # --- Configuration & Modern Styling ---
 st.set_page_config(layout="wide", page_title="PL Analytics Pro | Predictive Engine")
 
-# Modern Trading-Style CSS
 st.markdown("""
     <style>
-    /* Main background */
-    .stApp {
-        background-color: #0e1117;
-        color: #fafafa;
-    }
-    
-    /* Metric Cards */
-    [data-testid="stMetricValue"] {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #00d4ff;
-    }
-    [data-testid="stMetricLabel"] {
-        font-size: 0.9rem;
-        color: #94a3b8;
-        text-transform: uppercase;
-        letter-spacing: 0.05rem;
-    }
-    div[data-testid="metric-container"] {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Tabs Styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #1e293b;
-        padding: 8px;
-        border-radius: 12px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 45px;
-        background-color: transparent;
-        border-radius: 8px;
-        color: #94a3b8;
-        border: none;
-        padding: 0 24px;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #3b82f6 !important;
-        color: white !important;
-    }
-
-    /* Headers */
-    h1, h2, h3 {
-        color: #f1f5f9;
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #0f172a;
-        border-right: 1px solid #334155;
-    }
+    .stApp { background-color: #0e1117; color: #fafafa; }
+    [data-testid="stMetricValue"] { font-size: 2rem; font-weight: 700; color: #00d4ff; }
+    [data-testid="stMetricLabel"] { font-size: 0.9rem; color: #94a3b8; text-transform: uppercase; }
+    div[data-testid="metric-container"] { background-color: #1e293b; border: 1px solid #334155; padding: 20px; border-radius: 12px; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: #1e293b; padding: 8px; border-radius: 12px; }
+    .stTabs [data-baseweb="tab"] { height: 45px; color: #94a3b8; border: none; padding: 0 24px; }
+    .stTabs [aria-selected="true"] { background-color: #3b82f6 !important; color: white !important; }
+    h1, h2, h3 { color: #f1f5f9; }
+    [data-testid="stSidebar"] { background-color: #0f172a; border-right: 1px solid #334155; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- Data Loading (Shared and Cached) ---
 @st.cache_data
 def load_all_dashboard_data():
-    df_ml_base = load_and_clean_data('all_seasons.csv')
-    df_with_stats = calculate_rolling_stats(df_ml_base)
-    model, le, features, test_data, latest_stats = None, None, None, None, None
-    try:
-        model, le, features, test_data = train_and_evaluate(df_with_stats)
-        latest_stats = get_latest_stats(df_with_stats)
-    except: pass
+    df_raw = load_and_clean_data('all_seasons.csv')
+    df_elo = calculate_elo(df_raw)
+    df_stats = calculate_rolling_stats(df_elo)
+    model, le, features, test_data = train_and_evaluate(df_stats)
+    latest_stats = get_latest_stats(df_stats)
     
-    df_hist = pd.read_csv('all_seasons.csv', low_memory=False)
-    df_hist.columns = df_hist.columns.str.replace('ï»¿', '').str.strip()
+    # Process for Project 1 logic
+    df_hist = df_raw.copy()
     df_hist.dropna(subset=['Season', 'FTR', 'B365H'], inplace=True)
     df_hist['B365H_Prob'] = 1 / df_hist['B365H']
     df_hist['HomeWin_Outcome'] = (df_hist['FTR'] == 'H').astype(int)
     
-    return df_ml_base, df_with_stats, model, le, features, test_data, latest_stats, df_hist
+    return df_raw, df_elo, df_stats, model, le, features, test_data, latest_stats, df_hist
 
 # --- Original Project 1 Logic ---
 def calculate_brier_scores(df_data):
@@ -105,7 +55,7 @@ def calculate_brier_scores(df_data):
 # --- Main App Execution ---
 try:
     with st.spinner("Initializing Predictive Engine..."):
-        df_ml, df_with_stats, model, le, features, test_data, latest, df_hist = load_all_dashboard_data()
+        df_raw, df_elo, df_stats, model, le, features, test_data, latest, df_hist = load_all_dashboard_data()
 
     # Sidebar Architecture
     st.sidebar.image("https://img.icons8.com/fluency/96/football.png", width=60)
@@ -151,67 +101,76 @@ try:
         st.title("🤖 Predictive Intelligence Engine")
         st.markdown("#### Project 2: Forward-Looking Machine Learning & Value Discovery")
         
-        if model is None:
-            st.error("Engine failure: Predictive model failed to initialize.")
-        else:
-            mc1, mc2, mc3, mc4 = st.columns(4)
-            y_test = test_data['Target']
-            y_pred = model.predict(test_data[features])
-            
-            mc1.metric("Model Precision", f"{accuracy_score(y_test, y_pred):.1%}")
-            mc2.metric("Active Features", "10")
-            mc3.metric("Test Period", df_ml['Season'].unique()[-1])
-            mc4.metric("Algorithm", "Random Forest")
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        y_test = test_data['Target']
+        y_pred = model.predict(test_data[features])
+        mc1.metric("Model Precision", f"{accuracy_score(y_test, y_pred):.1%}")
+        mc2.metric("Active Features", len(features))
+        mc3.metric("Test Period", df_raw['Season'].unique()[-1])
+        mc4.metric("Algorithm", "Random Forest")
 
-            mt1, mt2, mt3 = st.tabs(["Value Discovery", "Match Predictor", "Model Diagnostics"])
-            with mt1:
-                st.markdown("### Real-Time Value Discovery")
-                ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
-                probs = model.predict_proba(test_data[features])
-                c_map = {cls: i for i, cls in enumerate(le.classes_)}
-                v_list = []
-                for outcome in ['H', 'D', 'A']:
-                    p_col = probs[:, c_map[outcome]]
-                    ev_col = (p_col * test_data[f'B365{outcome}']) - 1
-                    for i, ev in enumerate(ev_col):
-                        if ev > ev_t:
-                            r = test_data.iloc[i]
-                            v_list.append({
-                                'Date': r['Date'].strftime('%Y-%m-%d'),
-                                'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}",
-                                'Pick': outcome,
-                                'Odds': r[f'B365{outcome}'],
-                                'Edge': f"{ev:.1%}"
-                            })
-                if v_list: st.table(pd.DataFrame(v_list).sort_values('Date', ascending=False).head(15))
-                else: st.warning("No signals found.")
+        mt1, mt2, mt3 = st.tabs(["Value Discovery", "Match Predictor", "Deep Diagnostics"])
+        with mt1:
+            st.markdown("### Real-Time Value Discovery")
+            ev_t = st.slider("Min Edge %", 0, 40, 15) / 100
+            probs = model.predict_proba(test_data[features])
+            c_map = {cls: i for i, cls in enumerate(le.classes_)}
+            v_list = []
+            for outcome in ['H', 'D', 'A']:
+                p_col = probs[:, c_map[outcome]]
+                ev_col = (p_col * test_data[f'B365{outcome}']) - 1
+                for i, ev in enumerate(ev_col):
+                    if ev > ev_t:
+                        r = test_data.iloc[i]
+                        v_list.append({'Date': r['Date'].strftime('%Y-%m-%d'), 'Match': f"{r['HomeTeam']} vs {r['AwayTeam']}", 'Pick': outcome, 'Odds': r[f'B365{outcome}'], 'Edge': f"{ev:.1%}"})
+            if v_list: st.table(pd.DataFrame(v_list).head(15))
+            else: st.warning("No signals found.")
             
-            with mt2:
-                st.markdown("### Predictive Match Terminal")
-                teams = sorted(latest['Team'].unique())
-                tc1, tc2 = st.columns(2)
-                ht, at = tc1.selectbox("HOME", teams, index=teams.index('Man United')), tc2.selectbox("AWAY", teams, index=teams.index('Arsenal'))
-                o1, o2, o3 = st.columns(3)
-                ho, do, ao = o1.number_input("Home", value=2.0), o2.number_input("Draw", value=3.4), o3.number_input("Away", value=3.5)
-                
-                if st.button("EXECUTE FORECAST"):
-                    hs, as_ = latest[latest['Team'] == ht].iloc[0], latest[latest['Team'] == at].iloc[0]
-                    inp = pd.DataFrame([{'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'], 'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'], 'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'], 'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners']}])
-                    rp = model.predict_proba(inp[features])[0]
-                    
-                    fig_m, ax_m = plt.subplots(figsize=(7, 3), facecolor='#0e1117')
-                    ax_m.set_facecolor('#0e1117')
-                    ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
-                    ax_m.tick_params(colors='#94a3b8')
-                    st.pyplot(fig_m)
+        with mt2:
+            st.markdown("### Predictive Match Terminal")
+            teams = sorted(latest['Team'].unique())
+            tc1, tc2 = st.columns(2)
+            ht, at = tc1.selectbox("HOME", teams, index=teams.index('Man United')), tc2.selectbox("AWAY", teams, index=teams.index('Arsenal'))
+            o1, o2, o3 = st.columns(3)
+            ho, do, ao = o1.number_input("Home", value=2.0), o2.number_input("Draw", value=3.4), o3.number_input("Away", value=3.5)
+            if st.button("EXECUTE FORECAST"):
+                hs, as_ = latest[latest['Team'] == ht].iloc[0], latest[latest['Team'] == at].iloc[0]
+                inp = pd.DataFrame([{'Home_Rolling_GoalsFor': hs['Rolling_GoalsFor'], 'Home_Rolling_GoalsAgainst': hs['Rolling_GoalsAgainst'], 'Home_Rolling_Shots': hs['Rolling_Shots'], 'Home_Rolling_ShotsOnTarget': hs['Rolling_ShotsOnTarget'], 'Home_Rolling_Corners': hs['Rolling_Corners'], 'Away_Rolling_GoalsFor': as_['Rolling_GoalsFor'], 'Away_Rolling_GoalsAgainst': as_['Rolling_GoalsAgainst'], 'Away_Rolling_Shots': as_['Rolling_Shots'], 'Away_Rolling_ShotsOnTarget': as_['Rolling_ShotsOnTarget'], 'Away_Rolling_Corners': as_['Rolling_Corners'], 'Home_Elo': hs['Elo'], 'Away_Elo': as_['Elo'], 'Elo_Diff': hs['Elo'] - as_['Elo']}])
+                rp = model.predict_proba(inp[features])[0]
+                fig_m, ax_m = plt.subplots(figsize=(7, 3), facecolor='#0e1117')
+                ax_m.set_facecolor('#0e1117')
+                ax_m.bar(['Home', 'Draw', 'Away'], [rp[c_map['H']], rp[c_map['D']], rp[c_map['A']]], color=['#ef4444', '#3b82f6', '#10b981'])
+                st.pyplot(fig_m)
 
-            with mt3:
-                st.markdown("### Model Quality Diagnostics")
-                cm = confusion_matrix(y_test, y_pred)
-                fig_cm, ax_cm = plt.subplots(figsize=(5, 4), facecolor='#0e1117')
-                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=le.classes_, yticklabels=le.classes_, ax=ax_cm)
-                ax_cm.set_title("Confusion Matrix", color='white')
-                st.pyplot(fig_cm)
+        with mt3:
+            st.markdown("### Model Reliability & Market Benchmark")
+            diag_c1, diag_c2 = st.columns(2)
+            
+            with diag_c1:
+                st.subheader("Reliability (Calibration)")
+                prob_true, prob_pred = get_calibration_data(model, test_data[features], y_test, le)
+                fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117')
+                ax_cal.set_facecolor('#0e1117')
+                ax_cal.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
+                ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6', label="Random Forest")
+                ax_cal.set_ylabel("Actual Frequency", color='white')
+                ax_cal.set_xlabel("Predicted Probability", color='white')
+                ax_cal.tick_params(colors='white')
+                st.pyplot(fig_cal)
+            
+            with diag_c2:
+                st.subheader("Market Comparison (Brier)")
+                bookies = {'B365': 'B365H', 'Bwin': 'BWH', 'VCBet': 'VCH', 'Model': 'Prob_H'}
+                test_data['Prob_H'] = model.predict_proba(test_data[features])[:, c_map['H']]
+                test_data['HW_Actual'] = (test_data['FTR'] == 'H').astype(int)
+                b_results = []
+                for name, col in bookies.items():
+                    if col in test_data.columns:
+                        tmp = test_data.dropna(subset=[col])
+                        if name == 'Model': b_score = np.mean((tmp[col] - tmp['HW_Actual'])**2)
+                        else: b_score = np.mean(((1/tmp[col]) - tmp['HW_Actual'])**2)
+                        b_results.append({'Bookie': name, 'Brier': b_score})
+                st.table(pd.DataFrame(b_results).sort_values('Brier'))
 
 except Exception as e:
     st.error(f"System Error: {e}")
