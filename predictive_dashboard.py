@@ -59,6 +59,7 @@ def apply_dark_style(ax):
     ax.title.set_color('white')
     for spine in ax.spines.values():
         spine.set_color('white')
+        spine.set_linewidth(1.5)
     return ax
 
 # --- AI Agent Tools ---
@@ -133,7 +134,7 @@ if prompt := st.sidebar.chat_input("Ask the Agent..."):
         else: response = "Agent Offline: API Key missing in System Secrets."
         st.write(response); st.session_state.messages.append({"role": "assistant", "content": response})
 
-# --- Main App ---
+# --- Main App Execution ---
 try:
     with st.spinner("Initializing Predictive Engine..."):
         df_raw, df_elo, df_stats, models, le, features, test_data, latest, df_hist = load_all_dashboard_data()
@@ -221,7 +222,7 @@ try:
             with diag_c1:
                 st.subheader("Reliability (Calibration)")
                 prob_true, prob_pred = get_calibration_data(active_model, test_data[features], y_test, le)
-                fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117'); apply_dark_style(ax_cal); ax_cal.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated"); ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6', label="Model"); st.pyplot(fig_cal)
+                fig_cal, ax_cal = plt.subplots(figsize=(5, 5), facecolor='#0e1117'); apply_dark_style(ax_cal); ax_cal.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated"); ax_cal.plot(prob_pred, prob_true, "s-", color='#3b82f6', label="Model"); ax_cal.set_ylabel("Actual Frequency"); ax_cal.set_xlabel("Predicted Probability"); st.pyplot(fig_cal)
             with diag_c2:
                 st.subheader("Market Comparison (Brier)")
                 bookies = {'B365': 'B365H', 'Bwin': 'BWH', 'VCBet': 'VCH', 'Model': 'Prob_H'}
@@ -257,13 +258,14 @@ try:
             st.divider()
             st.subheader("Strategy Discovery Optimizer")
             st.write("Top 5 Profitable Configurations (Iterative Search):")
-            # Simple grid search for optimization display
             opt_results = []
-            for m_ev in [0.05, 0.10, 0.15]:
-                for m_odds in [1.5, 2.0, 2.5]:
+            for m_ev in [0.05, 0.10, 0.15, 0.20]:
+                for m_odds in [1.5, 2.0, 2.5, 3.0]:
                     p_sum = sum([(r[f'B365{o}']-1 if r['FTR']==o else -1) for _, r in td.iterrows() for o in ['H','D','A'] if r[f'EV_{o}']>m_ev and m_odds<=r[f'B365{o}']<=m_odds+1.0])
-                    opt_results.append({'Min EV': m_ev, 'Odds Range': f"{m_odds}-{m_odds+1.0}", 'Total Profit': p_sum})
-            st.table(pd.DataFrame(opt_results).sort_values('Total Profit', ascending=False).head(5))
+                    count = sum([1 for _, r in td.iterrows() for o in ['H','D','A'] if r[f'EV_{o}']>m_ev and m_odds<=r[f'B365{o}']<=m_odds+1.0])
+                    roi = (p_sum / count) if count > 0 else -1
+                    opt_results.append({'Min EV': m_ev, 'Odds Range': f"{m_odds}-{m_odds+1.0}", 'Total Profit': p_sum, 'Strategy ROI': f"{roi:.1%}" if roi != -1 else "N/A"})
+            st.table(pd.DataFrame(opt_results).sort_values('Total Profit', ascending=False).head(10))
 
         with mt5:
             st.header("Poisson Scoreline Matrix")
@@ -282,16 +284,22 @@ try:
             vol_df = pd.DataFrame(vol_data).sort_values('Volatility', ascending=False)
             vc1, vc2 = st.columns([1, 1])
             with vc1: st.subheader("Volatility Rankings"); st.dataframe(vol_df.head(15), height=400)
-            with vc2: st.subheader("League Stability Map"); fig_vol, ax_vol = plt.subplots(figsize=(6, 6), facecolor='#0e1117'); apply_dark_style(ax_vol); sns.regplot(data=vol_df, x='Avg Goals', y='Volatility', ax=ax_vol, color='#3b82f6'); st.pyplot(fig_vol)
+            with vc2: 
+                st.subheader("League Stability Map")
+                fig_vol, ax_vol = plt.subplots(figsize=(6, 6), facecolor='#0e1117')
+                apply_dark_style(ax_vol)
+                sns.regplot(data=vol_df, x='Avg Goals', y='Volatility', ax=ax_vol, color='#3b82f6')
+                st.pyplot(fig_vol)
 
         with mt7:
             st.header("Project Evidence & Documentation")
-            doc_tabs = st.tabs(["Market Efficiency (Vig Analysis)", "Technical Methodology", "AI Development Trace"])
+            doc_tabs = st.tabs(["Market Efficiency", "Technical Methodology", "AI Development Trace", "Model Limitations"])
             with doc_tabs[0]:
                 st.subheader("Bookmaker Overround (Vig) Trend")
                 df_raw['Margin'] = (1/df_raw['B365H'] + 1/df_raw['B365D'] + 1/df_raw['B365A']) - 1
                 margin_trend = df_raw.groupby('Season')['Margin'].mean().reset_index()
                 fig_m, ax_m = plt.subplots(figsize=(10, 4), facecolor='#0e1117'); apply_dark_style(ax_m); ax_m.plot(margin_trend['Season'], margin_trend['Margin'], marker='o', color='#00d4ff'); ax_m.set_ylabel("Margin %"); plt.xticks(rotation=45); st.pyplot(fig_m)
+                st.markdown("**Vig Logic:** The margin (Vig) is the bookmaker's built-in commission. A 'Value' bet is only valid if the model probability exceeds the implied probability *after* accounting for this margin.")
             with doc_tabs[1]:
                 st.subheader("Technical Methodology")
                 st.markdown("""
@@ -313,6 +321,16 @@ try:
                 2. **Math:** Implementing Elo and Poisson probability matrices.
                 3. **Analytics:** Adding Calibration Curves and Brier Score leaderboards to meet academic rigor.
                 4. **Interface:** Engineering this professional Streamlit Pro trading terminal.
+                """)
+            with doc_tabs[3]:
+                st.subheader("Critical Model Limitations")
+                st.markdown("""
+                ### 1. Data Latency
+                The core model relies on historical CSV data. While the AI Agent can search for live news, the statistical features only update when the underlying dataset is refreshed.
+                ### 2. Squad Rotation & Intangibles
+                Traditional stats struggle to capture "Motivation" (e.g., end-of-season dead rubbers) or "Squad Depth" unless explicitly encoded as features.
+                ### 3. Black Swan Events
+                Red cards, VAR decisions, and freak injuries during a match introduce variance that no historical model can fully mitigate.
                 """)
 
 except Exception as e:
