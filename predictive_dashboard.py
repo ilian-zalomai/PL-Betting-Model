@@ -45,7 +45,7 @@ st.markdown("""
     [data-testid="stMetricValue"] { font-size: 2rem; font-weight: 700; color: #00d4ff; }
     div[data-testid="metric-container"] { background-color: #1e293b; border: 1px solid #334155; padding: 20px; border-radius: 12px; }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: #1e293b; padding: 8px; border-radius: 12px; }
-    .stTabs [aria-selected="true"] { background-color: #3b82f6 !important; color: white !important; }
+    .stTabs [aria-selected="true"] { background-color: transparent !important; color: #00d4ff !important; font-weight: bold; border-bottom: 2px solid #00d4ff !important; }
     [data-testid="stSidebar"] { background-color: #0f172a; border-right: 1px solid #334155; }
     </style>
     """, unsafe_allow_html=True)
@@ -298,7 +298,4 @@ try:
                 st.markdown("""### 2. Validation & Accuracy\n- **Chronological Split:** The system trains on historical data (2003-2024) and validates on the current 2025-26 season to eliminate 'look-ahead' bias.\n- **Multi-Algorithm Ensemble:** Users can switch between Random Forest, XGBoost, and Logistic Regression, or use the **Cumulative Ensemble** which averages probabilities across all three architectures.""")
             with doc_tabs[2]:
                 st.subheader("AI Development Log (Traceability)")
-                st.markdown("""This project represents a human-AI collaboration with **Gemini CLI**. AI acted as an agentic engineer responsible for:\n1. **Architecture:** Designing the 13-feature ETL pipeline.\n2. **Math:** Implementing Elo and Poisson probability matrices.\n3. **Analytics:** Adding Calibration Curves and Brier Score leaderboards to meet academic rigor.\n4. **Interface:** Engineering this professional Streamlit Pro trading terminal.""")
-
-except Exception as e:
-    st.error(f"System Error: {e}")
+                st.markdown("""This project represents a human-AI collaboration with **Gemini CLI**. AI acted as an agentic engineer responsible for:\n1. **Architecture:** Designing the 13-feature ETL pipeline.\n2. **Math:** Implementing Elo and Poisson probability matrices.\n3. **Analytics:** Adding Calibration Curves and Brier Score leaderboards to meet academic rigor.\n4. **Interface:** Engineering this professional Streamlit Pro trading ter
