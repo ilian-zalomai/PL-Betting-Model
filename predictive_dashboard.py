@@ -294,8 +294,26 @@ try:
                 fig_m, ax_m = plt.subplots(figsize=(10, 4), facecolor='#0e1117'); apply_dark_style(ax_m); ax_m.plot(margin_trend['Season'], margin_trend['Margin'], marker='o', color='#00d4ff'); ax_m.set_ylabel("Margin %"); plt.xticks(rotation=45); st.pyplot(fig_m)
             with doc_tabs[1]:
                 st.subheader("Technical Methodology")
-                st.markdown("""### 1. Forward-Looking Feature Engineering\n- **Elo Rating System:** A dynamic strength index updated match-by-match since 2003 using the formula $R_n = R_o + K(S - E)$.\n- **Rolling Performance Stats:** Form is captured via 5-game rolling windows of Goals, Shots, Shots on Target, and Corners for both teams.\n- **Total Features:** 13 predictive metrics per match, ensuring the model identifies momentum, not just historical averages.""")
-                st.markdown("""### 2. Validation & Accuracy\n- **Chronological Split:** The system trains on historical data (2003-2024) and validates on the current 2025-26 season to eliminate 'look-ahead' bias.\n- **Multi-Algorithm Ensemble:** Users can switch between Random Forest, XGBoost, and Logistic Regression, or use the **Cumulative Ensemble** which averages probabilities across all three architectures.""")
+                st.markdown("""
+                ### 1. Forward-Looking Feature Engineering
+                - **Elo Rating System:** A dynamic strength index updated match-by-match since 2003 using the formula $R_n = R_o + K(S - E)$.
+                - **Rolling Performance Stats:** Form is captured via 5-game rolling windows of Goals, Shots, Shots on Target, and Corners for both teams.
+                - **Total Features:** 13 predictive metrics per match, ensuring the model identifies momentum, not just historical averages.
+                """)
+                st.markdown("""
+                ### 2. Validation & Accuracy
+                - **Chronological Split:** The system trains on historical data (2003-2024) and validates on the current 2025-26 season to eliminate 'look-ahead' bias.
+                - **Multi-Algorithm Ensemble:** Users can switch between Random Forest, XGBoost, and Logistic Regression, or use the **Cumulative Ensemble** which averages probabilities across all three architectures.
+                """)
             with doc_tabs[2]:
                 st.subheader("AI Development Log (Traceability)")
-                st.markdown("""This project represents a human-AI collaboration with **Gemini CLI**. AI acted as an agentic engineer responsible for:\n1. **Architecture:** Designing the 13-feature ETL pipeline.\n2. **Math:** Implementing Elo and Poisson probability matrices.\n3. **Analytics:** Adding Calibration Curves and Brier Score leaderboards to meet academic rigor.\n4. **Interface:** Engineering this professional Streamlit Pro trading ter
+                st.markdown("""
+                This project represents a human-AI collaboration with **Gemini CLI**. AI acted as an agentic engineer responsible for:
+                1. **Architecture:** Designing the 13-feature ETL pipeline.
+                2. **Math:** Implementing Elo and Poisson probability matrices.
+                3. **Analytics:** Adding Calibration Curves and Brier Score leaderboards to meet academic rigor.
+                4. **Interface:** Engineering this professional Streamlit Pro trading terminal.
+                """)
+
+except Exception as e:
+    st.error(f"System Error: {e}")
