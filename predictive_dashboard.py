@@ -313,8 +313,4 @@ try:
                 ### 1. Forward-Looking Feature Engineering
                 - **Elo Rating System:** A dynamic strength index updated match-by-match since 2003 using the formula $R_n = R_o + K(S - E)$.
                 - **Rolling Performance Stats:** Form is captured via 5-game rolling windows of Goals, Shots, Shots on Target, and Corners for both teams.
-                - **Total Features:** 13 predictive metrics per match, ensuring the model identifies momentum, not just historical averages.
-                """)
-                st.markdown("""
-                ### 2. Validation & Accuracy
-                - **Chronological Split:** The system trains on historical data (2003-2024) and validates on the current 2025-26 season to eliminate 'look-ahea
+                - **Total Features:** 13 predictive m
