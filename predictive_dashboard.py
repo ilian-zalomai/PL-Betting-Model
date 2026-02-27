@@ -226,16 +226,23 @@ try:
             with diag_c2:
                 st.subheader("Market Comparison (Brier)")
                 bookies = {'B365': 'B365H', 'Bwin': 'BWH', 'VCBet': 'VCH', 'Model': 'Prob_H'}
+                
+                # Add Probability and Actual Outcome to test_data for scoring
                 test_data['Prob_H'] = active_model.predict_proba(test_data[features])[:, c_map['H']]
-                test_data['HW_Actual'] = (test_data['FTR'] == 'H').astype(int)
-                b_results = []
+                test_data['HomeWin_Outcome'] = (test_data['FTR'] == 'H').astype(int)
+                
+                brier_results = []
                 for name, col in bookies.items():
                     if col in test_data.columns:
                         tmp = test_data.dropna(subset=[col])
-                        if name == 'Model': b_score = np.mean((tmp[col] - tmp['HW_Actual'])**2)
-                        else: b_score = np.mean(((1/tmp[col]) - tmp['HW_Actual'])**2)
-                        b_results.append({'Bookie': name, 'Brier': b_score})
-                st.table(pd.DataFrame(b_results).sort_values('Brier'))
+                        if name == 'Model':
+                            # Use existing logic but centralized in future if needed
+                            b_score = ((tmp[col] - tmp['HomeWin_Outcome'])**2).mean()
+                        else:
+                            # Standardized implied prob logic
+                            b_score = (((1/tmp[col]) - tmp['HomeWin_Outcome'])**2).mean()
+                        brier_results.append({'Bookie': name, 'Brier': b_score})
+                st.table(pd.DataFrame(brier_results).sort_values('Brier'))
 
         with mt4:
             st.header("Historical Strategy Backtest")
@@ -310,28 +317,4 @@ try:
                 """)
                 st.markdown("""
                 ### 2. Validation & Accuracy
-                - **Chronological Split:** The system trains on historical data (2003-2024) and validates on the current 2025-26 season to eliminate 'look-ahead' bias.
-                - **Multi-Algorithm Ensemble:** Users can switch between Random Forest, XGBoost, and Logistic Regression, or use the **Cumulative Ensemble** which averages probabilities across all three architectures.
-                """)
-            with doc_tabs[2]:
-                st.subheader("AI Development Log (Traceability)")
-                st.markdown("""
-                This project represents a human-AI collaboration with **Gemini CLI**. AI acted as an agentic engineer responsible for:
-                1. **Architecture:** Designing the 13-feature ETL pipeline.
-                2. **Math:** Implementing Elo and Poisson probability matrices.
-                3. **Analytics:** Adding Calibration Curves and Brier Score leaderboards to meet academic rigor.
-                4. **Interface:** Engineering this professional Streamlit Pro trading terminal.
-                """)
-            with doc_tabs[3]:
-                st.subheader("Critical Model Limitations")
-                st.markdown("""
-                ### 1. Data Latency
-                The core model relies on historical CSV data. While the AI Agent can search for live news, the statistical features only update when the underlying dataset is refreshed.
-                ### 2. Squad Rotation & Intangibles
-                Traditional stats struggle to capture "Motivation" (e.g., end-of-season dead rubbers) or "Squad Depth" unless explicitly encoded as features.
-                ### 3. Black Swan Events
-                Red cards, VAR decisions, and freak injuries during a match introduce variance that no historical model can fully mitigate.
-                """)
-
-except Exception as e:
-    st.error(f"System Error: {e}")
+                - **Chronological Split:** The system trains on historical data (2003-2024) and validates on the current 2025-26 season to eliminate 'look-ahea
