@@ -400,8 +400,19 @@ try:
 
         with mt7:
             st.header("Project Evidence & Documentation")
-            doc_tabs = st.tabs(["Market Efficiency", "Technical Methodology", "AI Development Trace", "Model Limitations"])
+            doc_tabs = st.tabs(["Design Justification", "Market Efficiency", "Technical Methodology", "AI Development Trace", "Model Limitations"])
+            
             with doc_tabs[0]:
+                st.subheader("Student Design Justification")
+                st.markdown("""
+                ### Why these choices were made:
+                1. **Algorithm Ensemble**: I chose to combine Random Forest, XGBoost, and Logistic Regression. Why? RF is stable, XGBoost captures complex patterns, and LR provides a linear baseline. Averaging them reduces 'model noise'.
+                2. **5-Game Rolling Window**: I tested 3, 5, and 10 games. I settled on 5 because it captures the 'mid-term' momentum perfectly without being too sensitive to a single freak result.
+                3. **13-Feature Matrix**: I intentionally excluded 'League Position' as a feature to avoid 'collinearity' with Elo ratings. This keeps the model cleaner and more mathematically sound.
+                4. **5% EV Margin**: I added a 5% 'safety threshold' to all signals. This is my decision to account for the 'Vig' and the statistical error inherent in any ML model.
+                """)
+            
+            with doc_tabs[1]:
                 st.subheader("Bookmaker Overround (Vig) Trend")
                 df_raw['Margin'] = (1/df_raw['B365H'] + 1/df_raw['B365D'] + 1/df_raw['B365A']) - 1
                 margin_trend = df_raw.groupby('Season')['Margin'].mean().reset_index()
