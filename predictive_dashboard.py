@@ -423,7 +423,7 @@ try:
                 plt.xticks(rotation=45)
                 st.pyplot(fig_m)
                 st.markdown("**Vig Logic:** The margin (Vig) is the bookmaker's built-in commission. A 'Value' bet is only valid if the model probability exceeds the implied probability *after* accounting for this margin.")
-            with doc_tabs[1]:
+            with doc_tabs[2]:
                 st.subheader("Technical Methodology")
                 st.markdown("""
                 ### 1. Forward-Looking Feature Engineering
@@ -436,7 +436,7 @@ try:
                 - **Chronological Split:** The system trains on historical data (2003-2024) and validates on the current 2025-26 season to eliminate 'look-ahead' bias.
                 - **Multi-Algorithm Ensemble:** Users can switch between Random Forest, XGBoost, and Logistic Regression, or use the **Cumulative Ensemble** which averages probabilities across all three architectures.
                 """)
-            with doc_tabs[2]:
+            with doc_tabs[3]:
                 st.subheader("AI Development Log (Traceability)")
                 st.markdown("""
                 This project represents a human-AI collaboration with **Gemini CLI**. AI acted as an agentic engineer responsible for:
@@ -445,7 +445,7 @@ try:
                 3. **Analytics:** Adding Calibration Curves and Brier Score leaderboards to meet academic rigor.
                 4. **Interface:** Engineering this professional Streamlit Pro trading terminal.
                 """)
-            with doc_tabs[3]:
+            with doc_tabs[4]:
                 st.subheader("Critical Model Limitations")
                 st.markdown("""
                 ### 1. Data Latency
